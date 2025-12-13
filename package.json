@@ -1,0 +1,45 @@
+{
+  "name": "claude-issue-solver",
+  "version": "1.0.0",
+  "description": "Automatically solve GitHub issues using Claude Code",
+  "main": "dist/index.js",
+  "bin": {
+    "claude-issue": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "claude",
+    "github",
+    "issues",
+    "ai",
+    "automation",
+    "cli"
+  ],
+  "author": "MikeOuroumis",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MikeOuroumis/claude-issue-solver.git"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0",
+    "inquirer": "^8.2.6",
+    "ora": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^8.2.10",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

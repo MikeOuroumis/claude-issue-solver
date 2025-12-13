@@ -1,0 +1,88 @@
+#!/usr/bin/env node
+
+import { Command } from 'commander';
+import chalk from 'chalk';
+import { checkRequirements } from './utils/helpers';
+import { isGitRepo } from './utils/git';
+import { listCommand } from './commands/list';
+import { solveCommand } from './commands/solve';
+import { prCommand } from './commands/pr';
+import { cleanCommand } from './commands/clean';
+import { selectCommand } from './commands/select';
+
+const program = new Command();
+
+program
+  .name('claude-issue')
+  .description('Automatically solve GitHub issues using Claude Code')
+  .version('1.0.0');
+
+// Check requirements before any command
+program.hook('preAction', () => {
+  if (!isGitRepo()) {
+    console.log(chalk.red('❌ Not in a git repository'));
+    process.exit(1);
+  }
+
+  const { ok, missing } = checkRequirements();
+  if (!ok) {
+    console.log(chalk.red('\n❌ Missing requirements:\n'));
+    for (const m of missing) {
+      console.log(chalk.yellow(`   • ${m}`));
+    }
+    console.log();
+    process.exit(1);
+  }
+});
+
+// Default command - interactive selection
+program
+  .argument('[issue]', 'Issue number to solve')
+  .action(async (issue?: string) => {
+    if (issue) {
+      const issueNumber = parseInt(issue, 10);
+      if (isNaN(issueNumber)) {
+        console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
+        process.exit(1);
+      }
+      await solveCommand(issueNumber);
+    } else {
+      await selectCommand();
+    }
+  });
+
+// List command
+program
+  .command('list')
+  .alias('ls')
+  .description('List open issues')
+  .action(listCommand);
+
+// PR command
+program
+  .command('pr <issue>')
+  .description('Create PR for a solved issue')
+  .action(async (issue: string) => {
+    const issueNumber = parseInt(issue, 10);
+    if (isNaN(issueNumber)) {
+      console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
+      process.exit(1);
+    }
+    await prCommand(issueNumber);
+  });
+
+// Clean command
+program
+  .command('clean <issue>')
+  .alias('rm')
+  .description('Remove worktree and branch for an issue')
+  .action(async (issue: string) => {
+    const issueNumber = parseInt(issue, 10);
+    if (isNaN(issueNumber)) {
+      console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
+      process.exit(1);
+    }
+    await cleanCommand(issueNumber);
+  });
+
+program.parse();

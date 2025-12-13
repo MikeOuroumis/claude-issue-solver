@@ -11,13 +11,14 @@ $ claude-issue
 
 Open issues for my-project:
 
-#42    Add dark mode support
-#38    Fix login bug on mobile
-#35    Update dependencies
-
-Enter issue number to solve (or q to quit): 42
+? Select an issue to solve:
+❯ #42  Add dark mode support
+  #38  Fix login bug on mobile
+  #35  Update dependencies
+  Cancel
 
 📋 Fetching issue #42...
+✔ Found issue #42
 📌 Issue: Add dark mode support
 🌿 Creating worktree with branch: issue-42-add-dark-mode-support
 🤖 Opening new terminal to run Claude Code...
@@ -28,41 +29,33 @@ Enter issue number to solve (or q to quit): 42
 
 ## Features
 
-- **Interactive issue selection** - Lists open issues and lets you pick one
-- **Worktree isolation** - Each issue gets its own worktree, work on multiple issues in parallel
-- **Automatic PR creation** - Creates a PR that closes the issue when merged
-- **Works with any repo** - Auto-detects project name from git remote
-- **Opens in new terminal** - Keeps your current terminal free (supports iTerm2 and Terminal.app on macOS)
+- 🎯 **Interactive issue selection** - Lists open issues with arrow-key navigation
+- 🌿 **Worktree isolation** - Each issue gets its own worktree, work on multiple issues in parallel
+- 🤖 **Automatic PR creation** - Creates a PR that closes the issue when merged
+- 📁 **Works with any repo** - Auto-detects project name from git remote
+- 💻 **Opens in new terminal** - Keeps your current terminal free (supports iTerm2 and Terminal.app on macOS)
 
 ## Requirements
 
+- [Node.js](https://nodejs.org/) >= 18
 - [Claude Code CLI](https://claude.ai/code) - `npm install -g @anthropic-ai/claude-code`
-- [GitHub CLI](https://cli.github.com/) - `brew install gh`
-- [jq](https://stedolan.github.io/jq/) - `brew install jq`
+- [GitHub CLI](https://cli.github.com/) - `brew install gh` (and run `gh auth login`)
 - Git
 
 ## Installation
 
-### Option 1: Clone and symlink (recommended)
-
 ```bash
-git clone https://github.com/MikeOuroumis/claude-issue-solver.git ~/.claude-issue-solver
-ln -s ~/.claude-issue-solver/claude-issue /usr/local/bin/claude-issue
+npm install -g claude-issue-solver
 ```
 
-### Option 2: Download directly
+Or install from source:
 
 ```bash
-curl -o /usr/local/bin/claude-issue https://raw.githubusercontent.com/YOUR_USERNAME/claude-issue-solver/main/claude-issue
-chmod +x /usr/local/bin/claude-issue
-```
-
-### Option 3: Add alias
-
-```bash
-git clone https://github.com/MikeOuroumis/claude-issue-solver.git ~/.claude-issue-solver
-echo "alias claude-issue='~/.claude-issue-solver/claude-issue'" >> ~/.zshrc
-source ~/.zshrc
+git clone https://github.com/MikeOuroumis/claude-issue-solver.git
+cd claude-issue-solver
+npm install
+npm run build
+npm link
 ```
 
 ## Usage
@@ -73,7 +66,7 @@ Run from any git repository with GitHub issues:
 # Interactive: show issues and select one
 claude-issue
 
-# Solve a specific issue
+# Solve a specific issue directly
 claude-issue 42
 
 # List open issues
@@ -86,7 +79,7 @@ claude-issue pr 42
 claude-issue clean 42
 
 # Show help
-claude-issue help
+claude-issue --help
 ```
 
 ## How it works
@@ -98,17 +91,52 @@ claude-issue help
 5. **Interactive session** - Claude stays open so you can ask for changes
 6. **Creates PR** - When you exit, prompts to create a PR that closes the issue
 
-## Configuration
+## Workflow
 
-The script auto-detects:
-- **Project name** - From git remote URL or directory name
-- **Worktree location** - Created as sibling to your project (e.g., `../myproject-issue-42-...`)
+```
+┌─────────────────┐
+│  claude-issue   │
+│   (select 42)   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Create worktree │
+│ ../project-issue│
+│ -42-fix-bug     │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Open new term   │
+│ with Claude     │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Claude solves   │
+│ issue & commits │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Create PR       │
+│ "Closes #42"    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ claude-issue    │
+│ clean 42        │
+└─────────────────┘
+```
 
 ## Tips
 
 - Use `/exit` in Claude to end the session and trigger PR creation
 - Worktrees share the same `.git` so commits are visible in main repo
 - Run `claude-issue clean <number>` after merging to clean up
+- You can work on multiple issues in parallel - each gets its own worktree
 
 ## License
 
