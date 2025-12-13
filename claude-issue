@@ -1,0 +1,508 @@
+#!/bin/bash
+
+# Claude Issue Solver
+# Automatically solve GitHub issues using Claude Code
+#
+# Installation:
+#   1. Clone or copy this script somewhere (e.g., ~/bin/claude-issue)
+#   2. Make it executable: chmod +x ~/bin/claude-issue
+#   3. Add to PATH or create alias: alias issue='~/bin/claude-issue'
+#
+# Usage: claude-issue [command] [options]
+#
+# Requirements: gh (GitHub CLI), jq, claude (Claude Code CLI)
+
+set -e
+
+COMMAND=$1
+
+# Auto-detect project name from current directory or git remote
+get_project_name() {
+  # Try to get from git remote
+  local remote_url=$(git config --get remote.origin.url 2>/dev/null)
+  if [ -n "$remote_url" ]; then
+    # Extract repo name from URL (handles both HTTPS and SSH)
+    basename -s .git "$remote_url"
+  else
+    # Fallback to current directory name
+    basename "$(pwd)"
+  fi
+}
+
+PROJECT_NAME=$(get_project_name)
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
+show_help() {
+  echo "Claude Issue Solver - Solve GitHub issues with Claude Code"
+  echo ""
+  echo "Usage: claude-issue [command] [options]"
+  echo ""
+  echo "Commands:"
+  echo "  (none)        Show open issues and select one to solve"
+  echo "  <number>      Solve specific issue"
+  echo "  list          List open issues"
+  echo "  pr <number>   Create PR for a solved issue"
+  echo "  clean <num>   Remove worktree and branch for an issue"
+  echo "  help          Show this help"
+  echo ""
+  echo "Examples:"
+  echo "  claude-issue              # Interactive: select an issue"
+  echo "  claude-issue 42           # Solve issue #42"
+  echo "  claude-issue list         # List open issues"
+  echo "  claude-issue pr 42        # Create PR for issue #42"
+  echo "  claude-issue clean 42     # Clean up issue #42 worktree"
+  echo ""
+  echo "Current project: $PROJECT_NAME"
+  echo "Project root: $PROJECT_ROOT"
+}
+
+list_issues() {
+  echo "Open issues for $PROJECT_NAME:"
+  echo ""
+  gh issue list --state open --limit 20
+}
+
+select_issue() {
+  echo "Open issues for $PROJECT_NAME:"
+  echo ""
+
+  # Get issues as JSON for easier parsing
+  ISSUES=$(gh issue list --state open --limit 20 --json number,title)
+
+  if [ -z "$ISSUES" ] || [ "$ISSUES" = "[]" ]; then
+    echo "No open issues found."
+    exit 0
+  fi
+
+  # Display issues with numbers
+  echo "$ISSUES" | jq -r '.[] | "#\(.number)\t\(.title)"'
+  echo ""
+
+  read -p "Enter issue number to solve (or q to quit): " SELECTED
+
+  if [ "$SELECTED" = "q" ] || [ "$SELECTED" = "Q" ] || [ -z "$SELECTED" ]; then
+    echo "Cancelled."
+    exit 0
+  fi
+
+  # Strip # if user entered it
+  SELECTED="${SELECTED#\#}"
+
+  if [[ "$SELECTED" =~ ^[0-9]+$ ]]; then
+    solve_issue "$SELECTED"
+  else
+    echo "❌ Invalid issue number: $SELECTED"
+    exit 1
+  fi
+}
+
+create_pr() {
+  local ISSUE_NUM=$1
+
+  if [ -z "$ISSUE_NUM" ]; then
+    echo "Usage: claude-issue pr <issue-number>"
+    exit 1
+  fi
+
+  # Get issue details
+  ISSUE_JSON=$(gh issue view "$ISSUE_NUM" --json title 2>/dev/null)
+  ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
+
+  if [ -z "$ISSUE_TITLE" ] || [ "$ISSUE_TITLE" = "null" ]; then
+    echo "❌ Could not find issue #$ISSUE_NUM"
+    exit 1
+  fi
+
+  # Find the worktree for this issue
+  BRANCH_SLUG=$(slugify "$ISSUE_TITLE")
+  BRANCH_NAME="issue-${ISSUE_NUM}-${BRANCH_SLUG}"
+  WORKTREE_PATH="$(dirname "$PROJECT_ROOT")/${PROJECT_NAME}-${BRANCH_NAME}"
+
+  if [ ! -d "$WORKTREE_PATH" ]; then
+    echo "❌ Worktree not found at $WORKTREE_PATH"
+    echo "   Make sure you've run: claude-issue $ISSUE_NUM"
+    exit 1
+  fi
+
+  # Check if there are any commits
+  COMMITS=$(git -C "$WORKTREE_PATH" log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
+
+  if [ "$COMMITS" -eq 0 ]; then
+    echo "⚠️  No commits found on branch $BRANCH_NAME"
+    echo "   Make sure Claude has committed changes before creating a PR."
+    exit 1
+  fi
+
+  echo "📋 Issue #$ISSUE_NUM: $ISSUE_TITLE"
+  echo "🌿 Branch: $BRANCH_NAME"
+  echo "📝 Commits: $COMMITS"
+  echo ""
+
+  read -p "Create PR to close issue #$ISSUE_NUM? (Y/n) " -n 1 -r
+  echo ""
+
+  if [[ $REPLY =~ ^[Nn]$ ]]; then
+    echo "Cancelled."
+    exit 0
+  fi
+
+  echo ""
+  echo "📤 Pushing branch and creating PR..."
+
+  git -C "$WORKTREE_PATH" push -u origin "$BRANCH_NAME"
+
+  # Get commit messages for PR body
+  COMMIT_LIST=$(git -C "$WORKTREE_PATH" log origin/main..HEAD --pretty=format:'- %s' | head -10)
+
+  PR_URL=$(gh pr create \
+    --title "Fix #$ISSUE_NUM: $ISSUE_TITLE" \
+    --body "$(cat <<EOF
+## Summary
+
+Closes #$ISSUE_NUM
+
+## Changes
+
+$COMMIT_LIST
+
+---
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+EOF
+)" \
+    --head "$BRANCH_NAME" \
+    --base main)
+
+  echo ""
+  echo "✅ PR created: $PR_URL"
+  echo ""
+  echo "The PR will automatically close issue #$ISSUE_NUM when merged."
+  echo "To clean up after merge: claude-issue clean $ISSUE_NUM"
+}
+
+clean_issue() {
+  local ISSUE_NUM=$1
+
+  if [ -z "$ISSUE_NUM" ]; then
+    echo "Usage: claude-issue clean <issue-number>"
+    exit 1
+  fi
+
+  # Get issue details
+  ISSUE_JSON=$(gh issue view "$ISSUE_NUM" --json title 2>/dev/null)
+  ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
+
+  if [ -z "$ISSUE_TITLE" ] || [ "$ISSUE_TITLE" = "null" ]; then
+    echo "❌ Could not find issue #$ISSUE_NUM"
+    exit 1
+  fi
+
+  BRANCH_SLUG=$(slugify "$ISSUE_TITLE")
+  BRANCH_NAME="issue-${ISSUE_NUM}-${BRANCH_SLUG}"
+  WORKTREE_PATH="$(dirname "$PROJECT_ROOT")/${PROJECT_NAME}-${BRANCH_NAME}"
+
+  echo "🧹 Cleaning up issue #$ISSUE_NUM"
+  echo "   Branch: $BRANCH_NAME"
+  echo "   Worktree: $WORKTREE_PATH"
+  echo ""
+
+  read -p "Remove worktree and delete branch? (y/N) " -n 1 -r
+  echo ""
+
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Cancelled."
+    exit 0
+  fi
+
+  # Remove worktree
+  if [ -d "$WORKTREE_PATH" ]; then
+    git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || true
+    echo "✓ Worktree removed"
+  fi
+
+  # Delete branch
+  git branch -D "$BRANCH_NAME" 2>/dev/null || true
+  echo "✓ Branch deleted"
+
+  echo ""
+  echo "✅ Cleanup complete!"
+}
+
+slugify() {
+  echo "$1" | \
+    tr '[:upper:]' '[:lower:]' | \
+    sed 's/[^a-z0-9]/-/g' | \
+    sed 's/--*/-/g' | \
+    sed 's/^-//' | \
+    sed 's/-$//' | \
+    cut -c1-50
+}
+
+solve_issue() {
+  local ISSUE_NUM=$1
+
+  echo "📋 Fetching issue #$ISSUE_NUM..."
+
+  # Get issue details
+  ISSUE_JSON=$(gh issue view "$ISSUE_NUM" --json title,body,labels,url)
+  ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
+  ISSUE_BODY=$(echo "$ISSUE_JSON" | jq -r '.body')
+  ISSUE_URL=$(echo "$ISSUE_JSON" | jq -r '.url')
+
+  if [ -z "$ISSUE_TITLE" ] || [ "$ISSUE_TITLE" = "null" ]; then
+    echo "❌ Could not find issue #$ISSUE_NUM"
+    exit 1
+  fi
+
+  echo ""
+  echo "📌 Issue: $ISSUE_TITLE"
+  echo "🔗 URL: $ISSUE_URL"
+  echo ""
+
+  # Create branch name from issue
+  BRANCH_SLUG=$(slugify "$ISSUE_TITLE")
+  BRANCH_NAME="issue-${ISSUE_NUM}-${BRANCH_SLUG}"
+  # Use absolute path so it works from any terminal
+  WORKTREE_PATH="$(dirname "$PROJECT_ROOT")/${PROJECT_NAME}-${BRANCH_NAME}"
+
+  # Fetch latest main
+  git fetch origin main --quiet
+
+  # Check if worktree already exists
+  if [ -d "$WORKTREE_PATH" ]; then
+    echo "🌿 Worktree already exists at: $WORKTREE_PATH"
+    echo "   Resuming work on issue #$ISSUE_NUM..."
+  else
+    echo "🌿 Creating worktree with branch: $BRANCH_NAME"
+
+    # Check if branch exists
+    if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+      # Branch exists, create worktree using existing branch
+      git worktree add "$WORKTREE_PATH" "$BRANCH_NAME"
+    else
+      # Create new branch
+      git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" origin/main
+    fi
+
+    if [ $? -ne 0 ]; then
+      echo "❌ Failed to create worktree"
+      exit 1
+    fi
+
+    # Copy environment files to worktree
+    echo "📁 Setting up worktree..."
+    [ -f "$PROJECT_ROOT/.env.local" ] && cp "$PROJECT_ROOT/.env.local" "$WORKTREE_PATH/"
+    [ -f "$PROJECT_ROOT/.env" ] && cp "$PROJECT_ROOT/.env" "$WORKTREE_PATH/"
+
+    # Symlink node_modules if exists (Node.js projects)
+    if [ -d "$PROJECT_ROOT/node_modules" ] && [ ! -e "$WORKTREE_PATH/node_modules" ]; then
+      ln -s "$PROJECT_ROOT/node_modules" "$WORKTREE_PATH/node_modules"
+    fi
+  fi
+
+  # Build the prompt for Claude
+  PROMPT="Please solve this GitHub issue:
+
+## Issue #$ISSUE_NUM: $ISSUE_TITLE
+
+$ISSUE_BODY
+
+---
+
+Instructions:
+1. Analyze the issue and understand what needs to be done
+2. Implement the necessary changes
+3. Make sure to run tests if applicable
+4. When done, commit your changes with a descriptive message that references the issue"
+
+  # Create a script to run Claude in the new terminal
+  RUNNER_SCRIPT="$WORKTREE_PATH/.claude-runner.sh"
+  cat > "$RUNNER_SCRIPT" << RUNNER
+#!/bin/bash
+cd "$WORKTREE_PATH"
+echo "🤖 Claude Code - Issue #$ISSUE_NUM: $ISSUE_TITLE"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Claude will stay open after solving the issue."
+echo "You can ask for more changes or type /exit when done."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Run Claude interactively with the initial prompt
+claude --dangerously-skip-permissions "$PROMPT"
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Claude session ended."
+echo ""
+
+# Check if there are any commits
+COMMITS=\$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
+
+if [ "\$COMMITS" -eq 0 ]; then
+  echo "⚠️  No commits were made."
+  echo "To clean up: claude-issue clean $ISSUE_NUM"
+else
+  echo "✅ Found \$COMMITS commit(s)"
+  echo ""
+  read -p "Create PR to close issue #$ISSUE_NUM? (Y/n) " -n 1 -r
+  echo ""
+
+  if [[ ! \$REPLY =~ ^[Nn]\$ ]]; then
+    echo ""
+    echo "📤 Pushing branch and creating PR..."
+
+    git push -u origin "$BRANCH_NAME"
+
+    # Get commit messages for PR body
+    COMMIT_LIST=\$(git log origin/main..HEAD --pretty=format:'- %s' | head -10)
+
+    PR_URL=\$(gh pr create \
+      --title "Fix #$ISSUE_NUM: $ISSUE_TITLE" \
+      --body "\$(cat <<EOF
+## Summary
+
+Closes #$ISSUE_NUM
+
+## Changes
+
+\$COMMIT_LIST
+
+---
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+EOF
+)" \
+      --head "$BRANCH_NAME" \
+      --base main)
+
+    echo ""
+    echo "✅ PR created: \$PR_URL"
+    echo ""
+    echo "The PR will automatically close issue #$ISSUE_NUM when merged."
+  fi
+
+  echo ""
+  echo "To clean up after merge: claude-issue clean $ISSUE_NUM"
+fi
+
+echo ""
+rm -f "$RUNNER_SCRIPT"
+RUNNER
+
+  chmod +x "$RUNNER_SCRIPT"
+
+  echo ""
+  echo "🤖 Opening new terminal to run Claude Code..."
+  echo ""
+
+  # Open new terminal window (macOS)
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # Try iTerm2 first, fall back to Terminal
+    if osascript -e 'tell application "System Events" to (name of processes) contains "iTerm2"' 2>/dev/null | grep -q "true"; then
+      osascript -e "
+        tell application \"iTerm\"
+          activate
+          set newWindow to (create window with default profile)
+          tell current session of newWindow
+            write text \"'$RUNNER_SCRIPT'\"
+          end tell
+        end tell
+      "
+    elif [ -d "/Applications/iTerm.app" ]; then
+      osascript -e "
+        tell application \"iTerm\"
+          activate
+          set newWindow to (create window with default profile)
+          tell current session of newWindow
+            write text \"'$RUNNER_SCRIPT'\"
+          end tell
+        end tell
+      "
+    else
+      osascript -e "
+        tell application \"Terminal\"
+          activate
+          do script \"'$RUNNER_SCRIPT'\"
+        end tell
+      "
+    fi
+  else
+    # Linux - try common terminal emulators
+    if command -v gnome-terminal &> /dev/null; then
+      gnome-terminal -- bash -c "'$RUNNER_SCRIPT'; exec bash"
+    elif command -v xterm &> /dev/null; then
+      xterm -e "'$RUNNER_SCRIPT'" &
+    else
+      echo "Could not detect terminal emulator. Running in current terminal..."
+      "$RUNNER_SCRIPT"
+      return
+    fi
+  fi
+
+  echo "✅ Worktree created at: $WORKTREE_PATH"
+  echo "   Claude is running in a new terminal window."
+  echo ""
+  echo "   You can also open VS Code: code $WORKTREE_PATH"
+  echo "   To clean up later: claude-issue clean $ISSUE_NUM"
+}
+
+# Check requirements
+check_requirements() {
+  local missing=0
+
+  if ! command -v gh &> /dev/null; then
+    echo "❌ GitHub CLI (gh) is required. Install: brew install gh"
+    missing=1
+  fi
+
+  if ! command -v jq &> /dev/null; then
+    echo "❌ jq is required. Install: brew install jq"
+    missing=1
+  fi
+
+  if ! command -v claude &> /dev/null; then
+    echo "❌ Claude Code CLI is required. Install: npm install -g @anthropic-ai/claude-code"
+    missing=1
+  fi
+
+  if ! git rev-parse --git-dir &> /dev/null; then
+    echo "❌ Not in a git repository"
+    missing=1
+  fi
+
+  if [ $missing -eq 1 ]; then
+    exit 1
+  fi
+}
+
+# Main
+check_requirements
+
+case "$COMMAND" in
+  "")
+    select_issue
+    ;;
+  help|-h|--help)
+    show_help
+    ;;
+  list|ls)
+    list_issues
+    ;;
+  pr)
+    create_pr "$2"
+    ;;
+  clean|rm)
+    clean_issue "$2"
+    ;;
+  *)
+    if [[ "$COMMAND" =~ ^[0-9]+$ ]]; then
+      solve_issue "$COMMAND"
+    else
+      echo "❌ Unknown command: $COMMAND"
+      echo ""
+      show_help
+      exit 1
+    fi
+    ;;
+esac
