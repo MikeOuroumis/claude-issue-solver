@@ -46,7 +46,7 @@ Enter issue number to solve (or q to quit): 42
 ### Option 1: Clone and symlink (recommended)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/claude-issue-solver.git ~/.claude-issue-solver
+git clone https://github.com/MikeOuroumis/claude-issue-solver.git ~/.claude-issue-solver
 ln -s ~/.claude-issue-solver/claude-issue /usr/local/bin/claude-issue
 ```
 
@@ -60,7 +60,7 @@ chmod +x /usr/local/bin/claude-issue
 ### Option 3: Add alias
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/claude-issue-solver.git ~/.claude-issue-solver
+git clone https://github.com/MikeOuroumis/claude-issue-solver.git ~/.claude-issue-solver
 echo "alias claude-issue='~/.claude-issue-solver/claude-issue'" >> ~/.zshrc
 source ~/.zshrc
 ```
