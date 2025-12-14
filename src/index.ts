@@ -10,12 +10,15 @@ import { prCommand } from './commands/pr';
 import { cleanCommand } from './commands/clean';
 import { selectCommand } from './commands/select';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const packageJson = require('../package.json');
+
 const program = new Command();
 
 program
   .name('claude-issue')
   .description('Automatically solve GitHub issues using Claude Code')
-  .version('1.0.0');
+  .version(packageJson.version);
 
 // Check requirements before any command
 program.hook('preAction', () => {
