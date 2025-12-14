@@ -7,7 +7,7 @@ import { isGitRepo } from './utils/git';
 import { listCommand } from './commands/list';
 import { solveCommand } from './commands/solve';
 import { prCommand } from './commands/pr';
-import { cleanCommand, cleanAllCommand } from './commands/clean';
+import { cleanCommand, cleanAllCommand, cleanMergedCommand } from './commands/clean';
 import { selectCommand } from './commands/select';
 import { goCommand } from './commands/go';
 
@@ -80,9 +80,12 @@ program
   .command('clean [issue]')
   .alias('rm')
   .option('-a, --all', 'Clean all issue worktrees')
-  .description('Remove worktree and branch for an issue (or all with --all)')
-  .action(async (issue: string | undefined, options: { all?: boolean }) => {
-    if (options.all) {
+  .option('-m, --merged', 'Clean only worktrees with merged PRs (no confirmation)')
+  .description('Remove worktree and branch for an issue (or all with --all, or merged with --merged)')
+  .action(async (issue: string | undefined, options: { all?: boolean; merged?: boolean }) => {
+    if (options.merged) {
+      await cleanMergedCommand();
+    } else if (options.all) {
       await cleanAllCommand();
     } else if (issue) {
       const issueNumber = parseInt(issue, 10);

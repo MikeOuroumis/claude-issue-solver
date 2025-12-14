@@ -496,3 +496,132 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
   console.log();
   console.log(chalk.green('✅ Cleanup complete!'));
 }
+
+export async function cleanMergedCommand(): Promise<void> {
+  const projectRoot = getProjectRoot();
+  const worktrees = getIssueWorktrees();
+
+  if (worktrees.length === 0) {
+    console.log(chalk.yellow('\nNo issue worktrees found.'));
+    return;
+  }
+
+  // Fetch status for all worktrees
+  const statusSpinner = ora('Fetching PR status...').start();
+  const worktreesWithStatus: WorktreeWithStatus[] = worktrees.map((wt) => ({
+    ...wt,
+    issueStatus: getIssueStatus(parseInt(wt.issueNumber, 10)),
+    prStatus: wt.branch ? getPRForBranch(wt.branch) : null,
+  }));
+  statusSpinner.stop();
+
+  // Filter to only merged PRs
+  const mergedWorktrees = worktreesWithStatus.filter(
+    (wt) => wt.prStatus?.state === 'merged'
+  );
+
+  if (mergedWorktrees.length === 0) {
+    console.log(chalk.yellow('\nNo worktrees with merged PRs found.'));
+
+    // Show what's available
+    if (worktreesWithStatus.length > 0) {
+      console.log(chalk.dim('\nExisting worktrees:'));
+      for (const wt of worktreesWithStatus) {
+        const status = getStatusLabel(wt);
+        console.log(`  ${chalk.cyan(`#${wt.issueNumber}`)}\t${status}`);
+      }
+    }
+    return;
+  }
+
+  console.log(chalk.bold(`\n🧹 Cleaning ${mergedWorktrees.length} worktree(s) with merged PRs:\n`));
+
+  for (const wt of mergedWorktrees) {
+    console.log(`  ${chalk.cyan(`#${wt.issueNumber}`)}\t${chalk.green('✓ PR merged')}`);
+    if (wt.branch) {
+      console.log(chalk.dim(`  \t${wt.branch}`));
+    }
+  }
+
+  console.log();
+
+  for (const wt of mergedWorktrees) {
+    const spinner = ora(`Cleaning issue #${wt.issueNumber}...`).start();
+
+    try {
+      // Close terminal and VS Code windows for this worktree
+      try {
+        closeWindowsWithPath(wt.path, wt.issueNumber);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch {
+        // Ignore errors closing windows
+      }
+
+      // Remove worktree/folder
+      const isOrphaned = !wt.branch;
+
+      // Try git worktree remove first (only if not orphaned)
+      if (!isOrphaned && fs.existsSync(wt.path)) {
+        try {
+          execSync(`git worktree remove "${wt.path}" --force`, {
+            cwd: projectRoot,
+            stdio: 'pipe',
+          });
+        } catch {
+          // Ignore - we'll force delete below
+        }
+      }
+
+      // Always try to force delete the folder
+      if (fs.existsSync(wt.path)) {
+        try {
+          execSync(`/bin/rm -rf "${wt.path}"`, { stdio: 'pipe', timeout: 10000 });
+        } catch {
+          try {
+            execSync(`rm -rf "${wt.path}"`, { shell: '/bin/bash', stdio: 'pipe', timeout: 10000 });
+          } catch {
+            try {
+              fs.rmSync(wt.path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+            } catch {
+              // Will report failure below
+            }
+          }
+        }
+      }
+
+      // Prune git worktrees
+      try {
+        execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
+      } catch {
+        // Ignore
+      }
+
+      // Delete branch (if we have one)
+      if (wt.branch) {
+        try {
+          execSync(`git branch -D "${wt.branch}"`, {
+            cwd: projectRoot,
+            stdio: 'pipe',
+          });
+        } catch {
+          // Branch may already be deleted
+        }
+      }
+
+      // Check if cleanup was successful
+      if (fs.existsSync(wt.path)) {
+        spinner.warn(`Cleaned issue #${wt.issueNumber} (folder may remain: ${wt.path})`);
+      } else {
+        spinner.succeed(`Cleaned issue #${wt.issueNumber}`);
+      }
+    } catch (error) {
+      spinner.fail(`Failed to clean issue #${wt.issueNumber}: ${error}`);
+    }
+  }
+
+  // Prune stale worktrees
+  execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
+
+  console.log();
+  console.log(chalk.green(`✅ Cleaned up ${mergedWorktrees.length} merged worktree(s)!`));
+}
