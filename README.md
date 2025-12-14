@@ -4,6 +4,18 @@ Automatically solve GitHub issues using [Claude Code](https://claude.ai/code).
 
 This CLI tool fetches an issue from your repo, creates a worktree, opens Claude Code in a new terminal to solve it, and creates a PR when done.
 
+> **⚠️ DISCLAIMER: USE AT YOUR OWN RISK**
+>
+> This tool runs Claude Code with the `--dangerously-skip-permissions` flag, which allows Claude to execute commands and modify files **without asking for confirmation**. This is powerful but potentially risky.
+>
+> **Before using this tool:**
+> - Understand that Claude will have unrestricted access to your codebase
+> - Review what Claude is doing in the terminal
+> - Use git to review changes before merging PRs
+> - Never run this on production systems or sensitive repositories without careful consideration
+>
+> By using this tool, you accept full responsibility for any changes made to your code.
+
 ## Demo
 
 ```bash
@@ -78,6 +90,12 @@ claude-issue pr 42
 # Clean up worktree and branch after PR is merged
 claude-issue clean 42
 
+# Clean all worktrees (shows PR/issue status)
+claude-issue clean
+
+# Navigate to a worktree or open its PR
+claude-issue go
+
 # Show help
 claude-issue --help
 ```
@@ -135,8 +153,9 @@ claude-issue --help
 
 - Use `/exit` in Claude to end the session and trigger PR creation
 - Worktrees share the same `.git` so commits are visible in main repo
-- Run `claude-issue clean <number>` after merging to clean up
+- Run `claude-issue clean` after merging to clean up - it shows PR status (merged/open/closed)
 - You can work on multiple issues in parallel - each gets its own worktree
+- Use `claude-issue go` to quickly navigate to worktrees or open PRs in browser
 
 ## License
 

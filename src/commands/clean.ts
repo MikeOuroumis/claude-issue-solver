@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
-import { getIssue } from '../utils/github';
+import { getIssueStatus, getPRForBranch, IssueStatus, PRStatus } from '../utils/github';
 import { getProjectRoot, getProjectName, exec } from '../utils/git';
 import { slugify } from '../utils/helpers';
 
@@ -89,6 +89,39 @@ interface Worktree {
   issueNumber: string;
 }
 
+interface WorktreeWithStatus extends Worktree {
+  issueStatus: IssueStatus | null;
+  prStatus: PRStatus | null;
+}
+
+function getStatusLabel(wt: WorktreeWithStatus): string {
+  if (!wt.branch) {
+    return chalk.yellow('(orphaned folder)');
+  }
+
+  if (wt.prStatus) {
+    switch (wt.prStatus.state) {
+      case 'merged':
+        return chalk.green('✓ PR merged');
+      case 'open':
+        return chalk.blue('◐ PR open');
+      case 'closed':
+        return chalk.red('✗ PR closed');
+    }
+  }
+
+  if (wt.issueStatus) {
+    switch (wt.issueStatus.state) {
+      case 'closed':
+        return chalk.dim('● Issue closed');
+      case 'open':
+        return chalk.cyan('○ Issue open');
+    }
+  }
+
+  return chalk.dim('? Unknown');
+}
+
 function getIssueWorktrees(): Worktree[] {
   const projectRoot = getProjectRoot();
   const projectName = getProjectName();
@@ -161,10 +194,23 @@ export async function cleanAllCommand(): Promise<void> {
     return;
   }
 
+  // Fetch status for all worktrees
+  const statusSpinner = ora('Fetching issue and PR status...').start();
+  const worktreesWithStatus: WorktreeWithStatus[] = worktrees.map((wt) => ({
+    ...wt,
+    issueStatus: getIssueStatus(parseInt(wt.issueNumber, 10)),
+    prStatus: wt.branch ? getPRForBranch(wt.branch) : null,
+  }));
+  statusSpinner.stop();
+
   console.log(chalk.bold('\n🧹 Found issue worktrees:\n'));
 
-  for (const wt of worktrees) {
-    console.log(`  ${chalk.cyan(`#${wt.issueNumber}`)}\t${wt.branch || chalk.yellow('(orphaned folder)')}`);
+  for (const wt of worktreesWithStatus) {
+    const status = getStatusLabel(wt);
+    console.log(`  ${chalk.cyan(`#${wt.issueNumber}`)}\t${status}`);
+    if (wt.branch) {
+      console.log(chalk.dim(`  \t${wt.branch}`));
+    }
     console.log(chalk.dim(`  \t${wt.path}`));
     console.log();
   }
@@ -310,11 +356,23 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
   const worktreePath = worktree.path;
   const isOrphaned = !branchName;
 
+  // Fetch status
+  const statusSpinner = ora('Fetching issue and PR status...').start();
+  const issueStatus = getIssueStatus(issueNumber);
+  const prStatus = branchName ? getPRForBranch(branchName) : null;
+  statusSpinner.stop();
+
+  const wtWithStatus: WorktreeWithStatus = {
+    ...worktree,
+    issueStatus,
+    prStatus,
+  };
+  const status = getStatusLabel(wtWithStatus);
+
   console.log();
   console.log(chalk.bold(`🧹 Cleaning up issue #${issueNumber}`));
-  if (isOrphaned) {
-    console.log(chalk.yellow(`   (Orphaned folder - no git worktree reference)`));
-  } else {
+  console.log(`   Status: ${status}`);
+  if (!isOrphaned) {
     console.log(chalk.dim(`   Branch: ${branchName}`));
   }
   console.log(chalk.dim(`   Folder: ${worktreePath}`));
