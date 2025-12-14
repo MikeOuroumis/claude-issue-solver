@@ -1,6 +1,6 @@
 {
   "name": "claude-issue-solver",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Automatically solve GitHub issues using Claude Code",
   "main": "dist/index.js",
   "bin": {
@@ -41,6 +41,7 @@
   },
   "files": [
     "dist",
-    "package.json"
+    "package.json",
+    "claude-issue-solver-logo.webp"
   ]
 }

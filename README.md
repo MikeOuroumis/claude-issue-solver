@@ -1,5 +1,9 @@
 # Claude Issue Solver
 
+<p align="center">
+  <img src="claude-issue-solver-logo.webp" alt="Claude Issue Solver Logo" width="200">
+</p>
+
 Automatically solve GitHub issues using [Claude Code](https://claude.ai/code).
 
 This CLI tool fetches an issue from your repo, creates a worktree, opens Claude Code in a new terminal to solve it, and creates a PR when done.
