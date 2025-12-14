@@ -93,40 +93,30 @@ cd "${worktreePath}"
 echo "🤖 Claude Code - Issue #${issueNumber}: ${issue.title}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Claude will stay open after solving the issue."
-echo "You can ask for more changes or type /exit when done."
+echo "When Claude commits, a PR will be created automatically."
+echo "The terminal stays open for follow-up changes."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-claude --dangerously-skip-permissions "${prompt.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"
+# Function to create PR
+create_pr() {
+  COMMITS=$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
 
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Claude session ended."
-echo ""
+  if [ "$COMMITS" -gt 0 ]; then
+    # Check if PR already exists
+    EXISTING_PR=$(gh pr list --head "${branchName}" --json number --jq '.[0].number' 2>/dev/null)
 
-COMMITS=$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
+    if [ -z "$EXISTING_PR" ]; then
+      echo ""
+      echo "📤 Pushing branch and creating PR..."
 
-if [ "$COMMITS" -eq 0 ]; then
-  echo "⚠️  No commits were made."
-  echo "To clean up: claude-issue clean ${issueNumber}"
-else
-  echo "✅ Found $COMMITS commit(s)"
-  echo ""
-  read -p "Create PR to close issue #${issueNumber}? (Y/n) " -n 1 -r
-  echo ""
+      git push -u origin "${branchName}" 2>/dev/null
 
-  if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-    echo ""
-    echo "📤 Pushing branch and creating PR..."
+      COMMIT_LIST=$(git log origin/main..HEAD --pretty=format:'- %s' | head -10)
 
-    git push -u origin "${branchName}"
-
-    COMMIT_LIST=$(git log origin/main..HEAD --pretty=format:'- %s' | head -10)
-
-    PR_URL=$(gh pr create \\
-      --title "Fix #${issueNumber}: ${issue.title.replace(/"/g, '\\"')}" \\
-      --body "## Summary
+      PR_URL=$(gh pr create \\
+        --title "Fix #${issueNumber}: ${issue.title.replace(/"/g, '\\"')}" \\
+        --body "## Summary
 
 Closes #${issueNumber}
 
@@ -137,21 +127,54 @@ $COMMIT_LIST
 ---
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)" \\
-      --head "${branchName}" \\
-      --base main)
+        --head "${branchName}" \\
+        --base main 2>/dev/null)
 
-    echo ""
-    echo "✅ PR created: $PR_URL"
-    echo ""
-    echo "The PR will automatically close issue #${issueNumber} when merged."
+      if [ -n "$PR_URL" ]; then
+        echo ""
+        echo "✅ PR created: $PR_URL"
+        echo ""
+      fi
+    else
+      # PR exists, just push new commits
+      git push origin "${branchName}" 2>/dev/null
+      echo ""
+      echo "📤 Pushed new commits to existing PR #$EXISTING_PR"
+      echo ""
+    fi
   fi
+}
 
-  echo ""
-  echo "To clean up after merge: claude-issue clean ${issueNumber}"
-fi
+# Watch for new commits in background and create PR
+LAST_COMMIT=""
+while true; do
+  CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null)
+  if [ "$CURRENT_COMMIT" != "$LAST_COMMIT" ] && [ -n "$LAST_COMMIT" ]; then
+    create_pr
+  fi
+  LAST_COMMIT="$CURRENT_COMMIT"
+  sleep 2
+done &
+WATCHER_PID=$!
+
+# Run Claude interactively
+claude --dangerously-skip-permissions "${prompt.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"
+
+# Kill the watcher
+kill $WATCHER_PID 2>/dev/null
+
+# Final PR check after Claude exits
+create_pr
 
 echo ""
-rm -f "${runnerScript}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Claude session ended. Terminal staying open."
+echo "To clean up after merge: claude-issue clean ${issueNumber}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Keep terminal open
+exec bash
 `;
 
   fs.writeFileSync(runnerScript, runnerContent, { mode: 0o755 });
