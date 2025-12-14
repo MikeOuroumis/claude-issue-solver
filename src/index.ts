@@ -7,7 +7,7 @@ import { isGitRepo } from './utils/git';
 import { listCommand } from './commands/list';
 import { solveCommand } from './commands/solve';
 import { prCommand } from './commands/pr';
-import { cleanCommand } from './commands/clean';
+import { cleanCommand, cleanAllCommand } from './commands/clean';
 import { selectCommand } from './commands/select';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -76,16 +76,24 @@ program
 
 // Clean command
 program
-  .command('clean <issue>')
+  .command('clean [issue]')
   .alias('rm')
-  .description('Remove worktree and branch for an issue')
-  .action(async (issue: string) => {
-    const issueNumber = parseInt(issue, 10);
-    if (isNaN(issueNumber)) {
-      console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
-      process.exit(1);
+  .option('-a, --all', 'Clean all issue worktrees')
+  .description('Remove worktree and branch for an issue (or all with --all)')
+  .action(async (issue: string | undefined, options: { all?: boolean }) => {
+    if (options.all) {
+      await cleanAllCommand();
+    } else if (issue) {
+      const issueNumber = parseInt(issue, 10);
+      if (isNaN(issueNumber)) {
+        console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
+        process.exit(1);
+      }
+      await cleanCommand(issueNumber);
+    } else {
+      // No issue and no --all flag, show all and let user choose
+      await cleanAllCommand();
     }
-    await cleanCommand(issueNumber);
   });
 
 program.parse();
