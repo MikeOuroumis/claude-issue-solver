@@ -9,12 +9,13 @@ import { getIssue } from '../utils/github';
 import { getProjectRoot, getProjectName, exec } from '../utils/git';
 import { slugify } from '../utils/helpers';
 
-function closeWindowsWithPath(folderPath: string): void {
+function closeWindowsWithPath(folderPath: string, issueNumber: string): void {
   if (os.platform() !== 'darwin') return;
 
   const folderName = path.basename(folderPath);
+  const issuePattern = `Issue #${issueNumber}`;
 
-  // Try to close iTerm2 tabs/windows with this path
+  // Try to close iTerm2 tabs/windows with this path or issue number
   try {
     execSync(`osascript -e '
       tell application "iTerm"
@@ -22,7 +23,7 @@ function closeWindowsWithPath(folderPath: string): void {
           repeat with t in tabs of w
             repeat with s in sessions of t
               set sessionName to name of s
-              if sessionName contains "${folderName}" then
+              if sessionName contains "${folderName}" or sessionName contains "${issuePattern}" then
                 close s
               end if
             end repeat
@@ -34,12 +35,13 @@ function closeWindowsWithPath(folderPath: string): void {
     // iTerm not running or no matching sessions
   }
 
-  // Try to close Terminal.app windows with this path
+  // Try to close Terminal.app windows with this path or issue number
   try {
     execSync(`osascript -e '
       tell application "Terminal"
         repeat with w in windows
-          if name of w contains "${folderName}" then
+          set windowName to name of w
+          if windowName contains "${folderName}" or windowName contains "${issuePattern}" then
             close w
           end if
         end repeat
@@ -50,6 +52,16 @@ function closeWindowsWithPath(folderPath: string): void {
   }
 
   // Try to close VS Code windows with this path
+  try {
+    // Use VS Code CLI to close the folder if it's open
+    execSync(`code --folder-uri "file://${folderPath}" --command "workbench.action.closeWindow"`, {
+      stdio: 'pipe',
+      timeout: 3000
+    });
+  } catch {
+    // VS Code CLI method failed, try AppleScript
+  }
+
   try {
     execSync(`osascript -e '
       tell application "System Events"
@@ -152,7 +164,9 @@ export async function cleanAllCommand(): Promise<void> {
     try {
       // Close terminal and VS Code windows for this worktree
       try {
-        closeWindowsWithPath(wt.path);
+        closeWindowsWithPath(wt.path, wt.issueNumber);
+        // Give windows time to close before removing folder
+        await new Promise((resolve) => setTimeout(resolve, 500));
       } catch {
         // Ignore errors closing windows
       }
@@ -165,8 +179,13 @@ export async function cleanAllCommand(): Promise<void> {
             stdio: 'pipe',
           });
         } catch {
-          // If git worktree remove fails, try removing directory manually
-          fs.rmSync(wt.path, { recursive: true, force: true });
+          // If git worktree remove fails, try removing directory manually with rm -rf
+          // This handles locked files better than fs.rmSync
+          try {
+            execSync(`rm -rf "${wt.path}"`, { stdio: 'pipe' });
+          } catch {
+            fs.rmSync(wt.path, { recursive: true, force: true });
+          }
           execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
         }
       }
@@ -263,10 +282,14 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
   }
 
   // Close terminal and VS Code windows for this worktree
+  const windowSpinner = ora('Closing terminal and VS Code windows...').start();
   try {
-    closeWindowsWithPath(worktreePath);
+    closeWindowsWithPath(worktreePath, String(issueNumber));
+    // Give windows time to close before removing folder
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    windowSpinner.succeed('Windows closed');
   } catch {
-    // Ignore errors closing windows
+    windowSpinner.warn('Could not close some windows');
   }
 
   // Remove worktree
@@ -279,13 +302,19 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
       });
       worktreeSpinner.succeed('Worktree removed');
     } catch {
-      // If git worktree remove fails, try removing directory manually
+      // If git worktree remove fails, try removing directory manually with rm -rf
       try {
-        fs.rmSync(worktreePath, { recursive: true, force: true });
+        execSync(`rm -rf "${worktreePath}"`, { stdio: 'pipe' });
         execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
         worktreeSpinner.succeed('Worktree removed (manually)');
       } catch {
-        worktreeSpinner.warn('Could not remove worktree directory');
+        try {
+          fs.rmSync(worktreePath, { recursive: true, force: true });
+          execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
+          worktreeSpinner.succeed('Worktree removed (manually)');
+        } catch {
+          worktreeSpinner.warn('Could not remove worktree directory');
+        }
       }
     }
   }
