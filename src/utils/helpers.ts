@@ -4,12 +4,20 @@ import * as path from 'path';
 import * as os from 'os';
 
 export function slugify(text: string): string {
-  return text
+  // Remove common prefixes in brackets like [FAQ], [Bug], etc.
+  const withoutBrackets = text.replace(/^\[.*?\]\s*/, '');
+
+  const slug = withoutBrackets
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '-')
     .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 50);
+    .replace(/^-|-$/g, '');
+
+  // Remove duplicate consecutive words (e.g., "faq-faq" -> "faq")
+  const words = slug.split('-');
+  const deduped = words.filter((word, i) => word !== words[i - 1]);
+
+  return deduped.join('-').slice(0, 30);
 }
 
 export function checkRequirements(): { ok: boolean; missing: string[] } {
