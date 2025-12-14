@@ -52,16 +52,7 @@ function closeWindowsWithPath(folderPath: string, issueNumber: string): void {
   }
 
   // Try to close VS Code windows with this path
-  try {
-    // Use VS Code CLI to close the folder if it's open
-    execSync(`code --folder-uri "file://${folderPath}" --command "workbench.action.closeWindow"`, {
-      stdio: 'pipe',
-      timeout: 3000
-    });
-  } catch {
-    // VS Code CLI method failed, try AppleScript
-  }
-
+  // Method 1: AppleScript to close windows matching the folder name
   try {
     execSync(`osascript -e '
       tell application "System Events"
@@ -69,15 +60,42 @@ function closeWindowsWithPath(folderPath: string, issueNumber: string): void {
           tell process "Code"
             set windowList to every window
             repeat with w in windowList
-              set windowName to name of w
-              if windowName contains "${folderName}" then
-                perform action "AXPress" of (first button of w whose subrole is "AXCloseButton")
-              end if
+              try
+                set windowName to name of w
+                if windowName contains "${folderName}" then
+                  perform action "AXPress" of (first button of w whose subrole is "AXCloseButton")
+                  delay 0.2
+                end if
+              end try
             end repeat
           end tell
         end if
       end tell
-    '`, { stdio: 'pipe' });
+    '`, { stdio: 'pipe', timeout: 5000 });
+  } catch {
+    // VS Code not running or no matching windows
+  }
+
+  // Method 2: Also try matching the issue number in window title
+  try {
+    execSync(`osascript -e '
+      tell application "System Events"
+        if exists process "Code" then
+          tell process "Code"
+            set windowList to every window
+            repeat with w in windowList
+              try
+                set windowName to name of w
+                if windowName contains "${issuePattern}" then
+                  perform action "AXPress" of (first button of w whose subrole is "AXCloseButton")
+                  delay 0.2
+                end if
+              end try
+            end repeat
+          end tell
+        end if
+      end tell
+    '`, { stdio: 'pipe', timeout: 5000 });
   } catch {
     // VS Code not running or no matching windows
   }
@@ -246,38 +264,44 @@ export async function cleanAllCommand(): Promise<void> {
 
       // Remove worktree/folder
       const isOrphaned = !wt.branch;
-      if (fs.existsSync(wt.path)) {
-        // Try git worktree remove first (only if not orphaned)
-        if (!isOrphaned) {
-          try {
-            execSync(`git worktree remove "${wt.path}" --force`, {
-              cwd: projectRoot,
-              stdio: 'pipe',
-            });
-          } catch {
-            // Ignore - we'll force delete below if needed
-          }
-        }
 
-        // If folder still exists, force delete it
-        if (fs.existsSync(wt.path)) {
+      // Try git worktree remove first (only if not orphaned)
+      if (!isOrphaned && fs.existsSync(wt.path)) {
+        try {
+          execSync(`git worktree remove "${wt.path}" --force`, {
+            cwd: projectRoot,
+            stdio: 'pipe',
+          });
+        } catch {
+          // Ignore - we'll force delete below
+        }
+      }
+
+      // Always try to force delete the folder
+      if (fs.existsSync(wt.path)) {
+        // Try multiple deletion methods
+        try {
+          execSync(`/bin/rm -rf "${wt.path}"`, { stdio: 'pipe', timeout: 10000 });
+        } catch {
+          // Fallback 1: try with shell
           try {
-            execSync(`/bin/rm -rf "${wt.path}"`, { stdio: 'pipe' });
+            execSync(`rm -rf "${wt.path}"`, { shell: '/bin/bash', stdio: 'pipe', timeout: 10000 });
           } catch {
+            // Fallback 2: Node.js rmSync
             try {
-              fs.rmSync(wt.path, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+              fs.rmSync(wt.path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
             } catch {
-              // Ignore - will check at end
+              // Will report failure below
             }
           }
         }
+      }
 
-        // Prune git worktrees
-        try {
-          execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
-        } catch {
-          // Ignore
-        }
+      // Prune git worktrees
+      try {
+        execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
+      } catch {
+        // Ignore
       }
 
       // Delete branch (if we have one)
@@ -292,7 +316,12 @@ export async function cleanAllCommand(): Promise<void> {
         }
       }
 
-      spinner.succeed(`Cleaned issue #${wt.issueNumber}`);
+      // Check if cleanup was successful
+      if (fs.existsSync(wt.path)) {
+        spinner.warn(`Cleaned issue #${wt.issueNumber} (folder may remain: ${wt.path})`);
+      } else {
+        spinner.succeed(`Cleaned issue #${wt.issueNumber}`);
+      }
     } catch (error) {
       spinner.fail(`Failed to clean issue #${wt.issueNumber}: ${error}`);
     }
