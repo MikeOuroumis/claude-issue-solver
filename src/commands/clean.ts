@@ -95,31 +95,58 @@ function getIssueWorktrees(): Worktree[] {
   const parentDir = path.dirname(projectRoot);
 
   const worktrees: Worktree[] = [];
+  const foundPaths = new Set<string>();
 
   // Get all worktrees from git
   const output = exec('git worktree list --porcelain', projectRoot);
-  if (!output) return worktrees;
+  if (output) {
+    const lines = output.split('\n');
+    let currentPath = '';
+    let currentBranch = '';
 
-  const lines = output.split('\n');
-  let currentPath = '';
-  let currentBranch = '';
+    for (const line of lines) {
+      if (line.startsWith('worktree ')) {
+        currentPath = line.replace('worktree ', '');
+      } else if (line.startsWith('branch refs/heads/')) {
+        currentBranch = line.replace('branch refs/heads/', '');
 
-  for (const line of lines) {
-    if (line.startsWith('worktree ')) {
-      currentPath = line.replace('worktree ', '');
-    } else if (line.startsWith('branch refs/heads/')) {
-      currentBranch = line.replace('branch refs/heads/', '');
-
-      // Check if this is an issue branch
-      const match = currentBranch.match(/^issue-(\d+)-/);
-      if (match && currentPath.includes(`${projectName}-issue-`)) {
-        worktrees.push({
-          path: currentPath,
-          branch: currentBranch,
-          issueNumber: match[1],
-        });
+        // Check if this is an issue branch
+        const match = currentBranch.match(/^issue-(\d+)-/);
+        if (match && currentPath.includes(`${projectName}-issue-`)) {
+          worktrees.push({
+            path: currentPath,
+            branch: currentBranch,
+            issueNumber: match[1],
+          });
+          foundPaths.add(currentPath);
+        }
       }
     }
+  }
+
+  // Also check for orphaned folders (folders that exist but aren't in git worktree list)
+  // This can happen when git worktree remove fails but the folder remains
+  try {
+    const folderPattern = `${projectName}-issue-`;
+    const entries = fs.readdirSync(parentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name.startsWith(folderPattern)) {
+        const folderPath = path.join(parentDir, entry.name);
+        if (!foundPaths.has(folderPath)) {
+          // Extract issue number from folder name (e.g., "project-issue-38-slug")
+          const match = entry.name.match(new RegExp(`${projectName}-issue-(\\d+)-`));
+          if (match) {
+            worktrees.push({
+              path: folderPath,
+              branch: '', // No branch known for orphaned folders
+              issueNumber: match[1],
+            });
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore errors reading parent directory
   }
 
   return worktrees;
@@ -137,7 +164,7 @@ export async function cleanAllCommand(): Promise<void> {
   console.log(chalk.bold('\n🧹 Found issue worktrees:\n'));
 
   for (const wt of worktrees) {
-    console.log(`  ${chalk.cyan(`#${wt.issueNumber}`)}\t${wt.branch}`);
+    console.log(`  ${chalk.cyan(`#${wt.issueNumber}`)}\t${wt.branch || chalk.yellow('(orphaned folder)')}`);
     console.log(chalk.dim(`  \t${wt.path}`));
     console.log();
   }
@@ -190,14 +217,16 @@ export async function cleanAllCommand(): Promise<void> {
         }
       }
 
-      // Delete branch
-      try {
-        execSync(`git branch -D "${wt.branch}"`, {
-          cwd: projectRoot,
-          stdio: 'pipe',
-        });
-      } catch {
-        // Branch may already be deleted
+      // Delete branch (if we have one)
+      if (wt.branch) {
+        try {
+          execSync(`git branch -D "${wt.branch}"`, {
+            cwd: projectRoot,
+            stdio: 'pipe',
+          });
+        } catch {
+          // Branch may already be deleted
+        }
       }
 
       spinner.succeed(`Cleaned issue #${wt.issueNumber}`);
@@ -216,8 +245,10 @@ export async function cleanAllCommand(): Promise<void> {
 export async function cleanCommand(issueNumber: number): Promise<void> {
   const projectRoot = getProjectRoot();
   const projectName = getProjectName();
+  const parentDir = path.dirname(projectRoot);
 
   // Find the worktree for this issue number (don't need to fetch from GitHub)
+  // This now also includes orphaned folders
   const worktrees = getIssueWorktrees();
   const worktree = worktrees.find((wt) => wt.issueNumber === String(issueNumber));
 
@@ -229,7 +260,7 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
     const matchingBranch = branches.find((b) => b.startsWith(branchPattern));
 
     if (!matchingBranch) {
-      console.log(chalk.red(`\n❌ No worktree or branch found for issue #${issueNumber}`));
+      console.log(chalk.red(`\n❌ No worktree, folder, or branch found for issue #${issueNumber}`));
       return;
     }
 
@@ -260,18 +291,23 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
 
   const branchName = worktree.branch;
   const worktreePath = worktree.path;
+  const isOrphaned = !branchName;
 
   console.log();
   console.log(chalk.bold(`🧹 Cleaning up issue #${issueNumber}`));
-  console.log(chalk.dim(`   Branch: ${branchName}`));
-  console.log(chalk.dim(`   Worktree: ${worktreePath}`));
+  if (isOrphaned) {
+    console.log(chalk.yellow(`   (Orphaned folder - no git worktree reference)`));
+  } else {
+    console.log(chalk.dim(`   Branch: ${branchName}`));
+  }
+  console.log(chalk.dim(`   Folder: ${worktreePath}`));
   console.log();
 
   const { confirm } = await inquirer.prompt([
     {
       type: 'confirm',
       name: 'confirm',
-      message: 'Remove worktree and delete branch?',
+      message: isOrphaned ? 'Remove orphaned folder?' : 'Remove worktree and delete branch?',
       default: false,
     },
   ]);
@@ -319,16 +355,18 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
     }
   }
 
-  // Delete branch
-  const branchSpinner = ora('Deleting branch...').start();
-  try {
-    execSync(`git branch -D "${branchName}"`, {
-      cwd: projectRoot,
-      stdio: 'pipe',
-    });
-    branchSpinner.succeed('Branch deleted');
-  } catch {
-    branchSpinner.warn('Could not delete branch (may already be deleted)');
+  // Delete branch (if we have one)
+  if (branchName) {
+    const branchSpinner = ora('Deleting branch...').start();
+    try {
+      execSync(`git branch -D "${branchName}"`, {
+        cwd: projectRoot,
+        stdio: 'pipe',
+      });
+      branchSpinner.succeed('Branch deleted');
+    } catch {
+      branchSpinner.warn('Could not delete branch (may already be deleted)');
+    }
   }
 
   console.log();
