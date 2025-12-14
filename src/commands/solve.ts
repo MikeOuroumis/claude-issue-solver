@@ -71,7 +71,7 @@ export async function solveCommand(issueNumber: number): Promise<void> {
     setupSpinner.succeed('Worktree setup complete');
   }
 
-  // Build the prompt for Claude
+  // Build the prompt for Claude and save to file (avoids shell escaping issues)
   const prompt = `Please solve this GitHub issue:
 
 ## Issue #${issueNumber}: ${issue.title}
@@ -85,6 +85,10 @@ Instructions:
 2. Implement the necessary changes
 3. Make sure to run tests if applicable
 4. When done, commit your changes with a descriptive message that references the issue`;
+
+  // Write prompt to a file to avoid shell escaping issues with backticks, <>, etc.
+  const promptFile = path.join(worktreePath, '.claude-prompt.txt');
+  fs.writeFileSync(promptFile, prompt);
 
   // Create runner script
   const runnerScript = path.join(worktreePath, '.claude-runner.sh');
@@ -171,8 +175,11 @@ while true; do
 done &
 WATCHER_PID=$!
 
-# Run Claude interactively
-claude --dangerously-skip-permissions "${prompt.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"
+# Run Claude interactively (read prompt from file to avoid shell escaping issues)
+claude --dangerously-skip-permissions "$(cat '${promptFile}')"
+
+# Clean up prompt file
+rm -f '${promptFile}'
 
 # Kill the watcher
 kill $WATCHER_PID 2>/dev/null
