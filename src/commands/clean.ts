@@ -205,11 +205,20 @@ function getIssueWorktrees(): Worktree[] {
 
 export async function cleanAllCommand(): Promise<void> {
   const projectRoot = getProjectRoot();
+  const currentDir = process.cwd();
   const worktrees = getIssueWorktrees();
 
   if (worktrees.length === 0) {
     console.log(chalk.yellow('\nNo issue worktrees found.'));
     return;
+  }
+
+  // Warn if user is inside a worktree that might be deleted
+  const inWorktree = worktrees.find((wt) => currentDir.startsWith(wt.path));
+  if (inWorktree) {
+    console.log(chalk.yellow(`\n⚠️  You are inside worktree #${inWorktree.issueNumber}`));
+    console.log(chalk.yellow(`   Run this command from the main project directory for best results.`));
+    console.log(chalk.dim(`   cd ${projectRoot}\n`));
   }
 
   // Fetch status for all worktrees
@@ -499,11 +508,20 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
 
 export async function cleanMergedCommand(): Promise<void> {
   const projectRoot = getProjectRoot();
+  const currentDir = process.cwd();
   const worktrees = getIssueWorktrees();
 
   if (worktrees.length === 0) {
     console.log(chalk.yellow('\nNo issue worktrees found.'));
     return;
+  }
+
+  // Warn if user is inside a worktree that might be deleted
+  const inWorktree = worktrees.find((wt) => currentDir.startsWith(wt.path));
+  if (inWorktree) {
+    console.log(chalk.yellow(`\n⚠️  You are inside worktree #${inWorktree.issueNumber}`));
+    console.log(chalk.yellow(`   Run this command from the main project directory for best results.`));
+    console.log(chalk.dim(`   cd ${projectRoot}\n`));
   }
 
   // Fetch status for all worktrees
@@ -620,7 +638,11 @@ export async function cleanMergedCommand(): Promise<void> {
   }
 
   // Prune stale worktrees
-  execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
+  try {
+    execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
+  } catch {
+    // May fail if current directory was deleted
+  }
 
   console.log();
   console.log(chalk.green(`✅ Cleaned up ${mergedWorktrees.length} merged worktree(s)!`));
