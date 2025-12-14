@@ -151,14 +151,24 @@ export async function cleanAllCommand(): Promise<void> {
 
     try {
       // Close terminal and VS Code windows for this worktree
-      closeWindowsWithPath(wt.path);
+      try {
+        closeWindowsWithPath(wt.path);
+      } catch {
+        // Ignore errors closing windows
+      }
 
       // Remove worktree
       if (fs.existsSync(wt.path)) {
-        execSync(`git worktree remove "${wt.path}" --force`, {
-          cwd: projectRoot,
-          stdio: 'pipe',
-        });
+        try {
+          execSync(`git worktree remove "${wt.path}" --force`, {
+            cwd: projectRoot,
+            stdio: 'pipe',
+          });
+        } catch {
+          // If git worktree remove fails, try removing directory manually
+          fs.rmSync(wt.path, { recursive: true, force: true });
+          execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
+        }
       }
 
       // Delete branch
@@ -173,7 +183,7 @@ export async function cleanAllCommand(): Promise<void> {
 
       spinner.succeed(`Cleaned issue #${wt.issueNumber}`);
     } catch (error) {
-      spinner.fail(`Failed to clean issue #${wt.issueNumber}`);
+      spinner.fail(`Failed to clean issue #${wt.issueNumber}: ${error}`);
     }
   }
 
@@ -185,21 +195,52 @@ export async function cleanAllCommand(): Promise<void> {
 }
 
 export async function cleanCommand(issueNumber: number): Promise<void> {
-  const spinner = ora(`Fetching issue #${issueNumber}...`).start();
-
-  const issue = getIssue(issueNumber);
-  if (!issue) {
-    spinner.fail(`Could not find issue #${issueNumber}`);
-    process.exit(1);
-  }
-
-  spinner.succeed(`Found issue #${issueNumber}`);
-
   const projectRoot = getProjectRoot();
   const projectName = getProjectName();
-  const branchSlug = slugify(issue.title);
-  const branchName = `issue-${issueNumber}-${branchSlug}`;
-  const worktreePath = path.join(path.dirname(projectRoot), `${projectName}-${branchName}`);
+
+  // Find the worktree for this issue number (don't need to fetch from GitHub)
+  const worktrees = getIssueWorktrees();
+  const worktree = worktrees.find((wt) => wt.issueNumber === String(issueNumber));
+
+  if (!worktree) {
+    // Try to find by looking for the branch pattern
+    const branchPattern = `issue-${issueNumber}-`;
+    const output = exec('git branch', projectRoot);
+    const branches = output.split('\n').map((b) => b.trim().replace('* ', ''));
+    const matchingBranch = branches.find((b) => b.startsWith(branchPattern));
+
+    if (!matchingBranch) {
+      console.log(chalk.red(`\n❌ No worktree or branch found for issue #${issueNumber}`));
+      return;
+    }
+
+    // Found a branch but no worktree - just delete the branch
+    console.log(chalk.bold(`\n🧹 Cleaning up issue #${issueNumber}`));
+    console.log(chalk.dim(`   Branch: ${matchingBranch}`));
+    console.log(chalk.dim(`   (No worktree found)`));
+
+    const { confirm } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirm',
+        message: 'Delete branch?',
+        default: false,
+      },
+    ]);
+
+    if (confirm) {
+      try {
+        execSync(`git branch -D "${matchingBranch}"`, { cwd: projectRoot, stdio: 'pipe' });
+        console.log(chalk.green('\n✅ Branch deleted!'));
+      } catch {
+        console.log(chalk.yellow('\n⚠️  Could not delete branch'));
+      }
+    }
+    return;
+  }
+
+  const branchName = worktree.branch;
+  const worktreePath = worktree.path;
 
   console.log();
   console.log(chalk.bold(`🧹 Cleaning up issue #${issueNumber}`));
@@ -222,7 +263,11 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
   }
 
   // Close terminal and VS Code windows for this worktree
-  closeWindowsWithPath(worktreePath);
+  try {
+    closeWindowsWithPath(worktreePath);
+  } catch {
+    // Ignore errors closing windows
+  }
 
   // Remove worktree
   if (fs.existsSync(worktreePath)) {
@@ -234,7 +279,14 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
       });
       worktreeSpinner.succeed('Worktree removed');
     } catch {
-      worktreeSpinner.warn('Could not remove worktree (may already be removed)');
+      // If git worktree remove fails, try removing directory manually
+      try {
+        fs.rmSync(worktreePath, { recursive: true, force: true });
+        execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
+        worktreeSpinner.succeed('Worktree removed (manually)');
+      } catch {
+        worktreeSpinner.warn('Could not remove worktree directory');
+      }
     }
   }
 
