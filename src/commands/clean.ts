@@ -9,7 +9,7 @@ import { getIssue } from '../utils/github';
 import { getProjectRoot, getProjectName, exec } from '../utils/git';
 import { slugify } from '../utils/helpers';
 
-function closeTerminalWithPath(folderPath: string): void {
+function closeWindowsWithPath(folderPath: string): void {
   if (os.platform() !== 'darwin') return;
 
   const folderName = path.basename(folderPath);
@@ -47,6 +47,27 @@ function closeTerminalWithPath(folderPath: string): void {
     '`, { stdio: 'pipe' });
   } catch {
     // Terminal not running or no matching windows
+  }
+
+  // Try to close VS Code windows with this path
+  try {
+    execSync(`osascript -e '
+      tell application "System Events"
+        if exists process "Code" then
+          tell process "Code"
+            set windowList to every window
+            repeat with w in windowList
+              set windowName to name of w
+              if windowName contains "${folderName}" then
+                perform action "AXPress" of (first button of w whose subrole is "AXCloseButton")
+              end if
+            end repeat
+          end tell
+        end if
+      end tell
+    '`, { stdio: 'pipe' });
+  } catch {
+    // VS Code not running or no matching windows
   }
 }
 
@@ -129,8 +150,8 @@ export async function cleanAllCommand(): Promise<void> {
     const spinner = ora(`Cleaning issue #${wt.issueNumber}...`).start();
 
     try {
-      // Close terminal windows for this worktree
-      closeTerminalWithPath(wt.path);
+      // Close terminal and VS Code windows for this worktree
+      closeWindowsWithPath(wt.path);
 
       // Remove worktree
       if (fs.existsSync(wt.path)) {
@@ -200,8 +221,8 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
     return;
   }
 
-  // Close terminal windows for this worktree
-  closeTerminalWithPath(worktreePath);
+  // Close terminal and VS Code windows for this worktree
+  closeWindowsWithPath(worktreePath);
 
   // Remove worktree
   if (fs.existsSync(worktreePath)) {
