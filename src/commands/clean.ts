@@ -3,10 +3,52 @@ import ora from 'ora';
 import inquirer from 'inquirer';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { execSync } from 'child_process';
 import { getIssue } from '../utils/github';
 import { getProjectRoot, getProjectName, exec } from '../utils/git';
 import { slugify } from '../utils/helpers';
+
+function closeTerminalWithPath(folderPath: string): void {
+  if (os.platform() !== 'darwin') return;
+
+  const folderName = path.basename(folderPath);
+
+  // Try to close iTerm2 tabs/windows with this path
+  try {
+    execSync(`osascript -e '
+      tell application "iTerm"
+        repeat with w in windows
+          repeat with t in tabs of w
+            repeat with s in sessions of t
+              set sessionName to name of s
+              if sessionName contains "${folderName}" then
+                close s
+              end if
+            end repeat
+          end repeat
+        end repeat
+      end tell
+    '`, { stdio: 'pipe' });
+  } catch {
+    // iTerm not running or no matching sessions
+  }
+
+  // Try to close Terminal.app windows with this path
+  try {
+    execSync(`osascript -e '
+      tell application "Terminal"
+        repeat with w in windows
+          if name of w contains "${folderName}" then
+            close w
+          end if
+        end repeat
+      end tell
+    '`, { stdio: 'pipe' });
+  } catch {
+    // Terminal not running or no matching windows
+  }
+}
 
 interface Worktree {
   path: string;
@@ -87,6 +129,9 @@ export async function cleanAllCommand(): Promise<void> {
     const spinner = ora(`Cleaning issue #${wt.issueNumber}...`).start();
 
     try {
+      // Close terminal windows for this worktree
+      closeTerminalWithPath(wt.path);
+
       // Remove worktree
       if (fs.existsSync(wt.path)) {
         execSync(`git worktree remove "${wt.path}" --force`, {
@@ -154,6 +199,9 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
     console.log(chalk.dim('Cancelled.'));
     return;
   }
+
+  // Close terminal windows for this worktree
+  closeTerminalWithPath(worktreePath);
 
   // Remove worktree
   if (fs.existsSync(worktreePath)) {
