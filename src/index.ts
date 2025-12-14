@@ -9,6 +9,7 @@ import { solveCommand } from './commands/solve';
 import { prCommand } from './commands/pr';
 import { cleanCommand, cleanAllCommand } from './commands/clean';
 import { selectCommand } from './commands/select';
+import { goCommand } from './commands/go';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageJson = require('../package.json');
@@ -94,6 +95,19 @@ program
       // No issue and no --all flag, show all and let user choose
       await cleanAllCommand();
     }
+  });
+
+// Go command - navigate to worktree and open PR
+program
+  .command('go [issue]')
+  .description('Navigate to an issue worktree, open VS Code, or view PR')
+  .action(async (issue?: string) => {
+    const issueNumber = issue ? parseInt(issue, 10) : undefined;
+    if (issue && isNaN(issueNumber!)) {
+      console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
+      process.exit(1);
+    }
+    await goCommand(issueNumber);
   });
 
 program.parse();
