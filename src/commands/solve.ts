@@ -90,6 +90,10 @@ Instructions:
   const runnerScript = path.join(worktreePath, '.claude-runner.sh');
   const runnerContent = `#!/bin/bash
 cd "${worktreePath}"
+
+# Set terminal title
+echo -ne "\\033]0;Issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"').slice(0, 50)}\\007"
+
 echo "🤖 Claude Code - Issue #${issueNumber}: ${issue.title}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
@@ -132,14 +136,24 @@ $COMMIT_LIST
 
       if [ -n "$PR_URL" ]; then
         echo ""
-        echo "✅ PR created: $PR_URL"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "✅ PR CREATED!"
         echo ""
+        echo "   $PR_URL"
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        # Update terminal title with PR info
+        PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+        echo -ne "\\033]0;Issue #${issueNumber} → PR #\$PR_NUM\\007"
       fi
     else
       # PR exists, just push new commits
       git push origin "${branchName}" 2>/dev/null
       echo ""
-      echo "📤 Pushed new commits to existing PR #$EXISTING_PR"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "📤 Pushed new commits to PR #$EXISTING_PR"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
     fi
   fi
