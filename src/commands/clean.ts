@@ -198,22 +198,39 @@ export async function cleanAllCommand(): Promise<void> {
         // Ignore errors closing windows
       }
 
-      // Remove worktree
+      // Remove worktree/folder
+      const isOrphaned = !wt.branch;
       if (fs.existsSync(wt.path)) {
-        try {
-          execSync(`git worktree remove "${wt.path}" --force`, {
-            cwd: projectRoot,
-            stdio: 'pipe',
-          });
-        } catch {
-          // If git worktree remove fails, try removing directory manually with rm -rf
-          // This handles locked files better than fs.rmSync
+        // Try git worktree remove first (only if not orphaned)
+        if (!isOrphaned) {
           try {
-            execSync(`rm -rf "${wt.path}"`, { stdio: 'pipe' });
+            execSync(`git worktree remove "${wt.path}" --force`, {
+              cwd: projectRoot,
+              stdio: 'pipe',
+            });
           } catch {
-            fs.rmSync(wt.path, { recursive: true, force: true });
+            // Ignore - we'll force delete below if needed
           }
+        }
+
+        // If folder still exists, force delete it
+        if (fs.existsSync(wt.path)) {
+          try {
+            execSync(`/bin/rm -rf "${wt.path}"`, { stdio: 'pipe' });
+          } catch {
+            try {
+              fs.rmSync(wt.path, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+            } catch {
+              // Ignore - will check at end
+            }
+          }
+        }
+
+        // Prune git worktrees
+        try {
           execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
+        } catch {
+          // Ignore
         }
       }
 
@@ -328,30 +345,50 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
     windowSpinner.warn('Could not close some windows');
   }
 
-  // Remove worktree
+  // Remove worktree/folder
   if (fs.existsSync(worktreePath)) {
     const worktreeSpinner = ora('Removing worktree...').start();
-    try {
-      execSync(`git worktree remove "${worktreePath}" --force`, {
-        cwd: projectRoot,
-        stdio: 'pipe',
-      });
-      worktreeSpinner.succeed('Worktree removed');
-    } catch {
-      // If git worktree remove fails, try removing directory manually with rm -rf
+
+    // Try git worktree remove first (only if not orphaned)
+    if (!isOrphaned) {
       try {
-        execSync(`rm -rf "${worktreePath}"`, { stdio: 'pipe' });
-        execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
-        worktreeSpinner.succeed('Worktree removed (manually)');
+        execSync(`git worktree remove "${worktreePath}" --force`, {
+          cwd: projectRoot,
+          stdio: 'pipe',
+        });
       } catch {
+        // Ignore - we'll force delete below if needed
+      }
+    }
+
+    // If folder still exists, force delete it
+    if (fs.existsSync(worktreePath)) {
+      try {
+        // Use rm -rf with full path
+        execSync(`/bin/rm -rf "${worktreePath}"`, { stdio: 'pipe' });
+      } catch {
+        // Try Node's rmSync as fallback
         try {
-          fs.rmSync(worktreePath, { recursive: true, force: true });
-          execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
-          worktreeSpinner.succeed('Worktree removed (manually)');
+          fs.rmSync(worktreePath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
         } catch {
-          worktreeSpinner.warn('Could not remove worktree directory');
+          // Last resort - try with sudo hint
+          worktreeSpinner.warn(`Could not remove directory. Try manually: rm -rf "${worktreePath}"`);
         }
       }
+    }
+
+    // Prune git worktrees
+    try {
+      execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
+    } catch {
+      // Ignore
+    }
+
+    // Check final result
+    if (fs.existsSync(worktreePath)) {
+      worktreeSpinner.warn(`Could not fully remove directory: ${worktreePath}`);
+    } else {
+      worktreeSpinner.succeed(isOrphaned ? 'Folder removed' : 'Worktree removed');
     }
   }
 
