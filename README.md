@@ -26,6 +26,7 @@ This CLI tool fetches an issue from your repo, creates a worktree, opens Claude 
 $ claude-issue
 
 Open issues for my-project:
+(2 issues with open PRs hidden)
 
 ? Select an issue to solve:
 ❯ #42  Add dark mode support
@@ -45,12 +46,13 @@ Open issues for my-project:
 
 ## Features
 
-- 🎯 **Interactive issue selection** - Lists open issues with arrow-key navigation
+- 🎯 **Interactive issue selection** - Lists open issues with arrow-key navigation (hides issues with open PRs)
 - ✨ **Create and solve** - Create new issues and start solving them immediately
 - 🌿 **Worktree isolation** - Each issue gets its own worktree, work on multiple issues in parallel
-- 🤖 **Automatic PR creation** - Creates a PR that closes the issue when merged
-- 📁 **Works with any repo** - Auto-detects project name from git remote
-- 💻 **Opens in new terminal** - Keeps your current terminal free (supports iTerm2 and Terminal.app on macOS)
+- 🤖 **Real-time PR creation** - Automatically creates/updates PR as Claude commits changes
+- 🧹 **Smart cleanup** - Auto-clean merged PRs, close VS Code/terminal windows on macOS
+- 📁 **Monorepo support** - Recursively copies all `.env*` files, symlinks `node_modules`
+- 💻 **Cross-platform terminals** - iTerm2, Terminal.app (macOS), gnome-terminal, xterm, konsole (Linux)
 
 ## Requirements
 
@@ -88,37 +90,60 @@ claude-issue 42
 
 # List open issues
 claude-issue list
+claude-issue ls
+
+# Create a new issue and solve it immediately
+claude-issue new "Add dark mode support"
+claude-issue new "Fix login bug" -b "Users can't login on mobile"
+claude-issue new "Fix crash" -l bug -l priority
 
 # Create PR for a solved issue (if you skipped it earlier)
 claude-issue pr 42
 
-# Clean up worktree and branch after PR is merged
-claude-issue clean 42
-
-# Clean all worktrees (shows PR/issue status)
-claude-issue clean
+# Clean up worktree and branch
+claude-issue clean 42        # Clean specific issue
+claude-issue clean           # Interactive selection
+claude-issue clean --all     # Clean all worktrees (with confirmation)
+claude-issue clean --merged  # Auto-clean only merged PRs (no confirmation)
 
 # Navigate to a worktree or open its PR
-claude-issue go
-
-# Create a new issue and solve it immediately
-claude-issue new "Add dark mode support"
-
-# With description and labels
-claude-issue new "Fix login bug" -b "Users can't login on mobile" -l bug
+claude-issue go              # Interactive selection
+claude-issue go 42           # Go to specific issue
 
 # Show help
 claude-issue --help
 ```
 
+## Commands Reference
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `claude-issue` | - | Interactive issue selection |
+| `claude-issue <number>` | - | Solve specific issue |
+| `claude-issue new <title>` | - | Create issue and solve it |
+| `claude-issue list` | `ls` | List open issues |
+| `claude-issue pr <number>` | - | Create PR for solved issue |
+| `claude-issue clean [number]` | `rm` | Remove worktree and branch |
+| `claude-issue go [number]` | - | Navigate to worktree |
+
+### Command Options
+
+**`new` command:**
+- `-b, --body <text>` - Issue description
+- `-l, --label <name>` - Add label (can be used multiple times)
+
+**`clean` command:**
+- `-a, --all` - Clean all issue worktrees (with confirmation)
+- `-m, --merged` - Clean only worktrees with merged PRs (no confirmation)
+
 ## How it works
 
 1. **Fetches issue** - Gets title and description from GitHub
 2. **Creates worktree** - Makes a new git worktree with branch `issue-{number}-{slug}`
-3. **Sets up environment** - Copies `.env` files, symlinks `node_modules`
+3. **Sets up environment** - Recursively copies all `.env*` files, symlinks `node_modules`
 4. **Opens Claude** - Launches Claude Code in a new terminal with the issue as context
-5. **Interactive session** - Claude stays open so you can ask for changes
-6. **Creates PR** - When you exit, prompts to create a PR that closes the issue
+5. **Real-time PR creation** - Background watcher creates PR on first commit, pushes updates on subsequent commits
+6. **Interactive session** - Claude stays open so you can ask for changes
 
 ## Workflow
 
@@ -149,24 +174,65 @@ claude-issue --help
          │
          ▼
 ┌─────────────────┐
-│ Create PR       │
+│ Auto-create PR  │
 │ "Closes #42"    │
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
 │ claude-issue    │
-│ clean 42        │
+│ clean --merged  │
 └─────────────────┘
 ```
 
+## Smart Features
+
+### Issue Filtering
+When selecting issues, the tool automatically hides issues that already have open PRs from `issue-{number}-*` branches. A message shows how many were hidden.
+
+### PR Status Display
+When cleaning, the tool shows the status of each worktree:
+- `✓ PR merged` - Safe to clean
+- `◐ PR open` - PR still under review
+- `✗ PR closed` - PR was closed without merging
+- `● Issue closed` - Issue was closed
+- `○ Issue open` - Issue still open
+
+### Orphaned Folder Cleanup
+If a worktree folder exists but isn't registered in git (e.g., after a failed cleanup), the tool detects it and offers to remove it.
+
+### Auto-Close Windows (macOS)
+When cleaning a worktree, the tool automatically closes related terminal windows (iTerm2/Terminal.app) and VS Code windows that have the worktree open.
+
+### Monorepo Support
+The tool recursively finds and copies all `.env*` files from your project, preserving directory structure. This works great with turborepo and other monorepo setups where env files exist in subdirectories like `apps/myapp/.env.local`.
+
+Skipped directories: `node_modules`, `.git`, `dist`, `build`, `.next`, `.turbo`
+
+### Branch Naming
+Branches are named `issue-{number}-{slug}` where the slug is:
+- Lowercase with hyphens
+- Max 30 characters
+- Bracket prefixes removed (e.g., `[Bug]` is stripped)
+- Duplicate consecutive words removed (e.g., `fix-fix-bug` → `fix-bug`)
+
 ## Tips
 
-- Use `/exit` in Claude to end the session and trigger PR creation
-- Worktrees share the same `.git` so commits are visible in main repo
-- Run `claude-issue clean` after merging to clean up - it shows PR status (merged/open/closed)
-- You can work on multiple issues in parallel - each gets its own worktree
+- PRs are created automatically when Claude makes commits - no need to wait until the end
+- Use `claude-issue clean --merged` after merging PRs for quick cleanup
+- Worktrees share the same `.git` so commits are visible in the main repo
+- You can work on multiple issues in parallel - each gets its own worktree and terminal
 - Use `claude-issue go` to quickly navigate to worktrees or open PRs in browser
+- The `go` command also offers options to open in Finder (macOS) or copy the cd command
+
+## Platform Support
+
+| Feature | macOS | Linux |
+|---------|-------|-------|
+| New terminal window | iTerm2, Terminal.app | gnome-terminal, xterm, konsole |
+| Auto-close terminals on clean | ✓ | - |
+| Auto-close VS Code on clean | ✓ | - |
+| Open in Finder | ✓ | - |
 
 ## License
 
