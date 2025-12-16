@@ -12,6 +12,33 @@ export interface IssueListItem {
   title: string;
 }
 
+export function createIssue(title: string, body?: string, labels?: string[]): number | null {
+  try {
+    let cmd = `gh issue create --title "${title.replace(/"/g, '\\"')}"`;
+
+    if (body) {
+      cmd += ` --body "${body.replace(/"/g, '\\"')}"`;
+    }
+
+    if (labels && labels.length > 0) {
+      for (const label of labels) {
+        cmd += ` --label "${label.replace(/"/g, '\\"')}"`;
+      }
+    }
+
+    const output = execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+
+    // Output is the issue URL, extract the number
+    const match = output.trim().match(/\/issues\/(\d+)$/);
+    if (match) {
+      return parseInt(match[1], 10);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function getIssue(issueNumber: number): Issue | null {
   try {
     const output = execSync(

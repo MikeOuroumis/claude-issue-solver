@@ -46,6 +46,7 @@ Open issues for my-project:
 ## Features
 
 - 🎯 **Interactive issue selection** - Lists open issues with arrow-key navigation
+- ✨ **Create and solve** - Create new issues and start solving them immediately
 - 🌿 **Worktree isolation** - Each issue gets its own worktree, work on multiple issues in parallel
 - 🤖 **Automatic PR creation** - Creates a PR that closes the issue when merged
 - 📁 **Works with any repo** - Auto-detects project name from git remote
@@ -99,6 +100,12 @@ claude-issue clean
 
 # Navigate to a worktree or open its PR
 claude-issue go
+
+# Create a new issue and solve it immediately
+claude-issue new "Add dark mode support"
+
+# With description and labels
+claude-issue new "Fix login bug" -b "Users can't login on mobile" -l bug
 
 # Show help
 claude-issue --help

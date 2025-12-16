@@ -10,6 +10,7 @@ import { prCommand } from './commands/pr';
 import { cleanCommand, cleanAllCommand, cleanMergedCommand } from './commands/clean';
 import { selectCommand } from './commands/select';
 import { goCommand } from './commands/go';
+import { newCommand } from './commands/new';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageJson = require('../package.json');
@@ -111,6 +112,16 @@ program
       process.exit(1);
     }
     await goCommand(issueNumber);
+  });
+
+// New command - create issue and solve it
+program
+  .command('new <title>')
+  .description('Create a new issue and immediately start solving it')
+  .option('-b, --body <body>', 'Issue description')
+  .option('-l, --label <label...>', 'Add labels to the issue')
+  .action(async (title: string, options: { body?: string; label?: string[] }) => {
+    await newCommand(title, options);
   });
 
 program.parse();
