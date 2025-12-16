@@ -100,12 +100,51 @@ export function openInNewTerminal(script: string): void {
   }
 }
 
+/**
+ * Recursively find all .env* files in a directory
+ */
+function findEnvFiles(dir: string, baseDir: string, results: string[] = []): string[] {
+  const skipDirs = ['node_modules', '.git', 'dist', 'build', '.next', '.turbo'];
+
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        if (!skipDirs.includes(entry.name)) {
+          findEnvFiles(fullPath, baseDir, results);
+        }
+      } else if (entry.isFile() && entry.name.startsWith('.env')) {
+        // Store relative path from base directory
+        const relativePath = path.relative(baseDir, fullPath);
+        results.push(relativePath);
+      }
+    }
+  } catch {
+    // Ignore permission errors or inaccessible directories
+  }
+
+  return results;
+}
+
 export function copyEnvFiles(from: string, to: string): void {
-  const envFiles = ['.env', '.env.local'];
-  for (const file of envFiles) {
-    const src = path.join(from, file);
-    const dest = path.join(to, file);
-    if (fs.existsSync(src) && !fs.existsSync(dest)) {
+  // Find all .env* files recursively
+  const envFiles = findEnvFiles(from, from);
+
+  for (const relativePath of envFiles) {
+    const src = path.join(from, relativePath);
+    const dest = path.join(to, relativePath);
+
+    // Create parent directory if it doesn't exist
+    const destDir = path.dirname(dest);
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+
+    // Only copy if destination doesn't exist
+    if (!fs.existsSync(dest)) {
       fs.copyFileSync(src, dest);
     }
   }
