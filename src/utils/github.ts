@@ -95,3 +95,30 @@ export function getPRForBranch(branch: string): PRStatus | null {
     return null;
   }
 }
+
+/**
+ * Get all open PRs with their head branch names (single API call)
+ * Returns a Set of issue numbers that have open PRs from issue-{number}-* branches
+ */
+export function getIssuesWithOpenPRs(): Set<number> {
+  try {
+    const output = execSync(
+      `gh pr list --state open --json headRefName --limit 100`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    const data = JSON.parse(output) as { headRefName: string }[];
+    const issueNumbers = new Set<number>();
+
+    for (const pr of data) {
+      // Match branches like "issue-42-fix-bug"
+      const match = pr.headRefName.match(/^issue-(\d+)-/);
+      if (match) {
+        issueNumbers.add(parseInt(match[1], 10));
+      }
+    }
+
+    return issueNumbers;
+  } catch {
+    return new Set();
+  }
+}
