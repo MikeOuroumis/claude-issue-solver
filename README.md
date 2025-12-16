@@ -4,6 +4,10 @@
   <img src="claude-issue-solver-logo.webp" alt="Claude Issue Solver Logo" width="200">
 </p>
 
+[![npm version](https://img.shields.io/npm/v/claude-issue-solver.svg)](https://www.npmjs.com/package/claude-issue-solver)
+[![npm downloads](https://img.shields.io/npm/dm/claude-issue-solver.svg)](https://www.npmjs.com/package/claude-issue-solver)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Automatically solve GitHub issues using [Claude Code](https://claude.ai/code).
 
 This CLI tool fetches an issue from your repo, creates a worktree, opens Claude Code in a new terminal to solve it, and creates a PR when done.
