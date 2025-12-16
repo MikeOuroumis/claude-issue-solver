@@ -11,6 +11,7 @@ import { cleanCommand, cleanAllCommand, cleanMergedCommand } from './commands/cl
 import { selectCommand } from './commands/select';
 import { goCommand } from './commands/go';
 import { newCommand } from './commands/new';
+import { initCommand } from './commands/init';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageJson = require('../package.json');
@@ -22,8 +23,16 @@ program
   .description('Automatically solve GitHub issues using Claude Code')
   .version(packageJson.version);
 
-// Check requirements before any command
-program.hook('preAction', () => {
+// Commands that skip requirements check
+const skipRequirementsCommands = ['init'];
+
+// Check requirements before any command (except init)
+program.hook('preAction', (thisCommand) => {
+  const commandName = thisCommand.name();
+  if (skipRequirementsCommands.includes(commandName)) {
+    return;
+  }
+
   if (!isGitRepo()) {
     console.log(chalk.red('❌ Not in a git repository'));
     process.exit(1);
@@ -122,6 +131,14 @@ program
   .option('-l, --label <label...>', 'Add labels to the issue')
   .action(async (title: string, options: { body?: string; label?: string[] }) => {
     await newCommand(title, options);
+  });
+
+// Init command - guided setup
+program
+  .command('init')
+  .description('Check and install requirements (gh, claude-code)')
+  .action(async () => {
+    await initCommand();
   });
 
 program.parse();

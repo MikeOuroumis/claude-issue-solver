@@ -67,6 +67,17 @@ Open issues for my-project:
 npm install -g claude-issue-solver
 ```
 
+Then run the setup wizard to check/install requirements:
+
+```bash
+claude-issue init
+```
+
+This will:
+- Check for Node.js, GitHub CLI, Claude Code, and Git
+- Install missing tools (on macOS via Homebrew)
+- Guide you through authentication for `gh` and `claude`
+
 Or install from source:
 
 ```bash
@@ -125,6 +136,7 @@ claude-issue --help
 | `claude-issue pr <number>` | - | Create PR for solved issue |
 | `claude-issue clean [number]` | `rm` | Remove worktree and branch |
 | `claude-issue go [number]` | - | Navigate to worktree |
+| `claude-issue init` | - | Setup wizard for requirements |
 
 ### Command Options
 
