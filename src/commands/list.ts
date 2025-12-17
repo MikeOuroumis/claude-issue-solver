@@ -14,7 +14,10 @@ export async function listCommand(): Promise<void> {
   }
 
   for (const issue of issues) {
-    console.log(`  ${chalk.cyan(`#${issue.number}`)}\t${issue.title}`);
+    const labels = issue.labels.length > 0
+      ? ' ' + issue.labels.map(l => chalk.hex(`#${l.color}`).bold(`[${l.name}]`)).join(' ')
+      : '';
+    console.log(`  ${chalk.cyan(`#${issue.number}`)}\t${issue.title}${labels}`);
   }
   console.log();
 }
