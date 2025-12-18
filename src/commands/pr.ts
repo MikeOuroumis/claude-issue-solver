@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { getIssue } from '../utils/github';
-import { getProjectRoot, getProjectName, getCommitCount, getCommitList } from '../utils/git';
+import { getProjectRoot, getProjectName, getCommitCount, getCommitList, getDefaultBranch } from '../utils/git';
 import { slugify } from '../utils/helpers';
 
 export async function prCommand(issueNumber: number): Promise<void> {
@@ -81,8 +81,9 @@ ${commitList}
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)`;
 
+    const baseBranch = getDefaultBranch();
     const prUrl = execSync(
-      `gh pr create --title "Fix #${issueNumber}: ${issue.title.replace(/"/g, '\\"')}" --body "${prBody.replace(/"/g, '\\"')}" --head "${branchName}" --base main`,
+      `gh pr create --title "Fix #${issueNumber}: ${issue.title.replace(/"/g, '\\"')}" --body "${prBody.replace(/"/g, '\\"')}" --head "${branchName}" --base ${baseBranch}`,
       { cwd: worktreePath, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
     ).trim();
 

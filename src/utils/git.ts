@@ -62,10 +62,34 @@ export function branchExists(branchName: string): boolean {
   }
 }
 
+export function getDefaultBranch(): string {
+  // Try to get from remote HEAD
+  try {
+    const output = exec('git symbolic-ref refs/remotes/origin/HEAD');
+    if (output) {
+      // Output is like "refs/remotes/origin/main" or "refs/remotes/origin/develop"
+      const match = output.match(/refs\/remotes\/origin\/(.+)/);
+      if (match) {
+        return match[1];
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  // Fallback: check if develop exists, otherwise main
+  if (branchExists('develop') || exec('git ls-remote --heads origin develop')) {
+    return 'develop';
+  }
+
+  return 'main';
+}
+
 export function getCommitCount(worktreePath: string): number {
   try {
+    const baseBranch = getDefaultBranch();
     const output = exec(
-      'git log origin/main..HEAD --oneline',
+      `git log origin/${baseBranch}..HEAD --oneline`,
       worktreePath
     );
     if (!output) return 0;
@@ -76,8 +100,9 @@ export function getCommitCount(worktreePath: string): number {
 }
 
 export function getCommitList(worktreePath: string, limit = 10): string {
+  const baseBranch = getDefaultBranch();
   return exec(
-    `git log origin/main..HEAD --pretty=format:'- %s' | head -${limit}`,
+    `git log origin/${baseBranch}..HEAD --pretty=format:'- %s' | head -${limit}`,
     worktreePath
   );
 }

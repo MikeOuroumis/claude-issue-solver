@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { getIssue } from '../utils/github';
-import { getProjectRoot, getProjectName, branchExists } from '../utils/git';
+import { getProjectRoot, getProjectName, branchExists, getDefaultBranch } from '../utils/git';
 import { slugify, copyEnvFiles, symlinkNodeModules, openInNewTerminal } from '../utils/helpers';
 
 export async function solveCommand(issueNumber: number): Promise<void> {
@@ -25,17 +25,18 @@ export async function solveCommand(issueNumber: number): Promise<void> {
 
   const projectRoot = getProjectRoot();
   const projectName = getProjectName();
+  const baseBranch = getDefaultBranch();
   const branchSlug = slugify(issue.title);
   const branchName = `issue-${issueNumber}-${branchSlug}`;
   const worktreePath = path.join(path.dirname(projectRoot), `${projectName}-${branchName}`);
 
-  // Fetch latest main
-  const fetchSpinner = ora('Fetching latest main...').start();
+  // Fetch latest base branch
+  const fetchSpinner = ora(`Fetching latest ${baseBranch}...`).start();
   try {
-    execSync('git fetch origin main --quiet', { cwd: projectRoot, stdio: 'pipe' });
-    fetchSpinner.succeed('Fetched latest main');
+    execSync(`git fetch origin ${baseBranch} --quiet`, { cwd: projectRoot, stdio: 'pipe' });
+    fetchSpinner.succeed(`Fetched latest ${baseBranch}`);
   } catch {
-    fetchSpinner.warn('Could not fetch origin/main');
+    fetchSpinner.warn(`Could not fetch origin/${baseBranch}`);
   }
 
   // Check if worktree already exists
@@ -52,7 +53,7 @@ export async function solveCommand(issueNumber: number): Promise<void> {
           stdio: 'pipe',
         });
       } else {
-        execSync(`git worktree add "${worktreePath}" -b "${branchName}" origin/main`, {
+        execSync(`git worktree add "${worktreePath}" -b "${branchName}" origin/${baseBranch}`, {
           cwd: projectRoot,
           stdio: 'pipe',
         });
@@ -108,7 +109,7 @@ echo ""
 
 # Function to create PR
 create_pr() {
-  COMMITS=$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
+  COMMITS=$(git log origin/${baseBranch}..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
 
   if [ "$COMMITS" -gt 0 ]; then
     # Check if PR already exists
@@ -120,7 +121,7 @@ create_pr() {
 
       git push -u origin "${branchName}" 2>/dev/null
 
-      COMMIT_LIST=$(git log origin/main..HEAD --pretty=format:'- %s' | head -10)
+      COMMIT_LIST=$(git log origin/${baseBranch}..HEAD --pretty=format:'- %s' | head -10)
 
       PR_URL=$(gh pr create \\
         --title "Fix #${issueNumber}: ${issue.title.replace(/"/g, '\\"')}" \\
@@ -136,7 +137,7 @@ $COMMIT_LIST
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)" \\
         --head "${branchName}" \\
-        --base main 2>/dev/null)
+        --base ${baseBranch} 2>/dev/null)
 
       if [ -n "$PR_URL" ]; then
         echo ""
