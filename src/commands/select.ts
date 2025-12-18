@@ -26,25 +26,25 @@ export async function selectCommand(): Promise<void> {
     };
   });
 
-  choices.push({
-    name: chalk.dim('Cancel'),
-    value: -1,
-  });
-
-  const { issueNumber } = await inquirer.prompt([
+  const { issueNumbers } = await inquirer.prompt([
     {
-      type: 'list',
-      name: 'issueNumber',
-      message: 'Select an issue to solve:',
+      type: 'checkbox',
+      name: 'issueNumbers',
+      message: 'Select issues to solve (space to select, enter to confirm):',
       choices,
       pageSize: 15,
     },
   ]);
 
-  if (issueNumber === -1) {
-    console.log(chalk.dim('Cancelled.'));
+  if (issueNumbers.length === 0) {
+    console.log(chalk.dim('No issues selected.'));
     return;
   }
 
-  await solveCommand(issueNumber);
+  console.log(chalk.cyan(`\nStarting ${issueNumbers.length} issue(s)...\n`));
+
+  for (const issueNumber of issueNumbers) {
+    await solveCommand(issueNumber);
+    console.log();
+  }
 }

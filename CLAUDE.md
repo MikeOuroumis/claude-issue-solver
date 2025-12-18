@@ -11,8 +11,20 @@ Claude Issue Solver is a CLI tool that automates GitHub issue solving using Clau
 ```bash
 npm run build      # Compile TypeScript to dist/
 npm run dev        # Run from source with ts-node
-npm link           # Install locally for testing as `claude-issue`
+npm link           # Install locally for testing as `claude-issue` or `cis`
 ```
+
+## Releasing
+
+Use the release script to publish new versions:
+
+```bash
+npm run release              # Interactive prompts for version, title, changelog
+npm run release 1.15.0       # Specify version directly
+npm run release 1.15.0 "Feature name"  # Version + release title
+```
+
+The script handles: version bump in package.json, build, git commit, git tag, push, npm publish, and GitHub release creation.
 
 ## Architecture
 
@@ -20,11 +32,14 @@ npm link           # Install locally for testing as `claude-issue`
 
 **Commands** (`src/commands/`):
 - `solve.ts` - Main workflow: fetches issue, creates worktree, writes a runner script that launches Claude Code with `--dangerously-skip-permissions`, watches for commits to auto-create PRs
-- `select.ts` - Interactive issue picker using inquirer
-- `list.ts` - Lists open GitHub issues
+- `select.ts` - Interactive multi-select issue picker using inquirer (checkbox); can select multiple issues to solve in parallel
+- `list.ts` - Lists open GitHub issues with [PR] indicator for issues that have open PRs
 - `pr.ts` - Manual PR creation for an issue
 - `clean.ts` - Removes worktrees and branches; supports `--merged` flag to auto-clean only merged PRs
 - `go.ts` - Navigate to worktrees, open VS Code, or view PRs
+
+**Scripts** (`scripts/`):
+- `release.ts` - Automated release script: bumps version, builds, commits, tags, pushes, publishes to npm, creates GitHub release
 
 **Utilities** (`src/utils/`):
 - `git.ts` - Git operations (exec wrappers, branch checks, project root/name detection)

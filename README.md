@@ -27,16 +27,18 @@ This CLI tool fetches an issue from your repo, creates a worktree, opens Claude 
 ## Demo
 
 ```bash
-$ claude-issue
+$ cis
 
 Open issues for my-project:
-(2 issues with open PRs hidden)
 
-? Select an issue to solve:
-❯ #42  Add dark mode support
-  #38  Fix login bug on mobile
-  #35  Update dependencies
-  Cancel
+? Select issues to solve (space to select, enter to confirm):
+❯ ◯ #42  Add dark mode support
+  ◯ #38  Fix login bug on mobile [PR]
+  ◯ #35  Update dependencies
+
+# Select multiple issues, then press enter...
+
+Starting 2 issue(s)...
 
 📋 Fetching issue #42...
 ✔ Found issue #42
@@ -46,11 +48,14 @@ Open issues for my-project:
 
 ✅ Worktree created at: ../my-project-issue-42-add-dark-mode-support
    Claude is running in a new terminal window.
+
+📋 Fetching issue #35...
+...
 ```
 
 ## Features
 
-- 🎯 **Interactive issue selection** - Lists open issues with arrow-key navigation (hides issues with open PRs)
+- 🎯 **Multi-select issues** - Select multiple issues to solve in parallel, each in its own terminal
 - ✨ **Create and solve** - Create new issues and start solving them immediately
 - 🌿 **Worktree isolation** - Each issue gets its own worktree, work on multiple issues in parallel
 - 🤖 **Real-time PR creation** - Automatically creates/updates PR as Claude commits changes
