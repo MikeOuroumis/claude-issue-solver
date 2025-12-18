@@ -21,7 +21,7 @@ const program = new Command();
 program
   .name('claude-issue')
   .description('Automatically solve GitHub issues using Claude Code')
-  .version(packageJson.version);
+  .version(packageJson.version, '-v, --version', 'Show version number');
 
 // Commands that skip requirements check
 const skipRequirementsCommands = ['init'];
