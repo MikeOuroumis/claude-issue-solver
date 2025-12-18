@@ -1,4 +1,7 @@
-import { execSync } from 'child_process';
+import { execSync, exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 export interface Issue {
   number: number;
@@ -112,6 +115,18 @@ export function getIssueStatus(issueNumber: number): IssueStatus | null {
   }
 }
 
+export async function getIssueStatusAsync(issueNumber: number): Promise<IssueStatus | null> {
+  try {
+    const { stdout } = await execAsync(`gh issue view ${issueNumber} --json state`);
+    const data = JSON.parse(stdout);
+    return {
+      state: data.state.toLowerCase() as 'open' | 'closed',
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function getPRForBranch(branch: string): PRStatus | null {
   try {
     const output = execSync(
@@ -119,6 +134,20 @@ export function getPRForBranch(branch: string): PRStatus | null {
       { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
     const data = JSON.parse(output);
+    if (data.length === 0) return null;
+    return {
+      state: data[0].state.toLowerCase() as 'open' | 'closed' | 'merged',
+      url: data[0].url,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getPRForBranchAsync(branch: string): Promise<PRStatus | null> {
+  try {
+    const { stdout } = await execAsync(`gh pr list --head "${branch}" --state all --json state,url --limit 1`);
+    const data = JSON.parse(stdout);
     if (data.length === 0) return null;
     return {
       state: data[0].state.toLowerCase() as 'open' | 'closed' | 'merged',

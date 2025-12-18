@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
-import { getIssueStatus, getPRForBranch, IssueStatus, PRStatus } from '../utils/github';
+import { getIssueStatus, getPRForBranch, getIssueStatusAsync, getPRForBranchAsync, IssueStatus, PRStatus } from '../utils/github';
 import { getProjectRoot, getProjectName, exec } from '../utils/git';
 import { slugify } from '../utils/helpers';
 
@@ -221,13 +221,15 @@ export async function cleanAllCommand(): Promise<void> {
     console.log(chalk.dim(`   cd ${projectRoot}\n`));
   }
 
-  // Fetch status for all worktrees
+  // Fetch status for all worktrees in parallel
   const statusSpinner = ora('Fetching issue and PR status...').start();
-  const worktreesWithStatus: WorktreeWithStatus[] = worktrees.map((wt) => ({
-    ...wt,
-    issueStatus: getIssueStatus(parseInt(wt.issueNumber, 10)),
-    prStatus: wt.branch ? getPRForBranch(wt.branch) : null,
-  }));
+  const worktreesWithStatus: WorktreeWithStatus[] = await Promise.all(
+    worktrees.map(async (wt) => ({
+      ...wt,
+      issueStatus: await getIssueStatusAsync(parseInt(wt.issueNumber, 10)),
+      prStatus: wt.branch ? await getPRForBranchAsync(wt.branch) : null,
+    }))
+  );
   statusSpinner.stop();
 
   console.log(chalk.bold('\n🧹 Found issue worktrees:\n'));
@@ -524,13 +526,15 @@ export async function cleanMergedCommand(): Promise<void> {
     console.log(chalk.dim(`   cd ${projectRoot}\n`));
   }
 
-  // Fetch status for all worktrees
+  // Fetch status for all worktrees in parallel
   const statusSpinner = ora('Fetching PR status...').start();
-  const worktreesWithStatus: WorktreeWithStatus[] = worktrees.map((wt) => ({
-    ...wt,
-    issueStatus: getIssueStatus(parseInt(wt.issueNumber, 10)),
-    prStatus: wt.branch ? getPRForBranch(wt.branch) : null,
-  }));
+  const worktreesWithStatus: WorktreeWithStatus[] = await Promise.all(
+    worktrees.map(async (wt) => ({
+      ...wt,
+      issueStatus: await getIssueStatusAsync(parseInt(wt.issueNumber, 10)),
+      prStatus: wt.branch ? await getPRForBranchAsync(wt.branch) : null,
+    }))
+  );
   statusSpinner.stop();
 
   // Filter to only merged PRs
