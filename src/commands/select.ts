@@ -20,8 +20,11 @@ export async function selectCommand(): Promise<void> {
   const choices = issues.map((issue) => {
     const hasPR = issuesWithPRs.has(issue.number);
     const prTag = hasPR ? chalk.magenta(' [PR]') : '';
+    const labels = issue.labels.length > 0
+      ? ' ' + issue.labels.map(l => chalk.hex(`#${l.color}`).bold(`[${l.name}]`)).join(' ')
+      : '';
     return {
-      name: `#${issue.number}\t${issue.title}${prTag}`,
+      name: `#${issue.number}\t${issue.title}${prTag}${labels}`,
       value: issue.number,
     };
   });
