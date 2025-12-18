@@ -1,10 +1,11 @@
 {
   "name": "claude-issue-solver",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Automatically solve GitHub issues using Claude Code",
   "main": "dist/index.js",
   "bin": {
-    "claude-issue": "dist/index.js"
+    "claude-issue": "dist/index.js",
+    "cis": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",

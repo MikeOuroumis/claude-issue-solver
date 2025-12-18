@@ -100,6 +100,9 @@ Run from any git repository with GitHub issues:
 # Interactive: show issues and select one
 claude-issue
 
+# Or use the short alias
+cis
+
 # Solve a specific issue directly
 claude-issue 42
 
@@ -133,7 +136,7 @@ claude-issue --help
 
 | Command | Alias | Description |
 |---------|-------|-------------|
-| `claude-issue` | - | Interactive issue selection |
+| `claude-issue` | `cis` | Interactive issue selection |
 | `claude-issue <number>` | - | Solve specific issue |
 | `claude-issue new <title>` | - | Create issue and solve it |
 | `claude-issue list` | `ls` | List open issues |
