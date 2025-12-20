@@ -114,7 +114,7 @@ claude-issue 42
 # List open issues
 claude-issue list
 claude-issue ls
-claude-issue list -v   # Show descriptions
+claude-issue list --verbose   # Show descriptions
 
 # Show full issue details
 claude-issue show 42
@@ -158,7 +158,7 @@ claude-issue --help
 ### Command Options
 
 **`list` command:**
-- `-v, --verbose` - Show issue descriptions
+- `--verbose` - Show issue descriptions
 
 **`new` command:**
 - `-b, --body <text>` - Issue description

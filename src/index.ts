@@ -71,7 +71,7 @@ program
   .command('list')
   .alias('ls')
   .description('List open issues')
-  .option('-v, --verbose', 'Show issue descriptions')
+  .option('--verbose', 'Show issue descriptions')
   .action((options: { verbose?: boolean }) => listCommand(options));
 
 // Show command
