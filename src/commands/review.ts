@@ -1,11 +1,19 @@
 import chalk from 'chalk';
 import ora from 'ora';
+import inquirer from 'inquirer';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { getIssue } from '../utils/github';
 import { getProjectRoot, getProjectName, branchExists, getDefaultBranch } from '../utils/git';
 import { slugify, copyEnvFiles, symlinkNodeModules, openInNewTerminal } from '../utils/helpers';
+
+interface OpenPR {
+  number: number;
+  title: string;
+  headRefName: string;
+  issueNumber: number | null;
+}
 
 export async function reviewCommand(issueNumber: number): Promise<void> {
   const spinner = ora(`Fetching issue #${issueNumber}...`).start();
@@ -232,4 +240,248 @@ function getRepoName(projectRoot: string): string {
   } catch {
     return '';
   }
+}
+
+function getOpenPRs(projectRoot: string): OpenPR[] {
+  try {
+    const output = execSync(
+      'gh pr list --state open --json number,title,headRefName --limit 50',
+      {
+        cwd: projectRoot,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }
+    );
+    const prs = JSON.parse(output) as { number: number; title: string; headRefName: string }[];
+
+    return prs.map((pr) => {
+      // Try to extract issue number from branch name (issue-42-slug)
+      const match = pr.headRefName.match(/^issue-(\d+)-/);
+      return {
+        ...pr,
+        issueNumber: match ? parseInt(match[1], 10) : null,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function selectReviewCommand(): Promise<void> {
+  const projectRoot = getProjectRoot();
+  const projectName = getProjectName();
+
+  console.log(chalk.bold(`\nOpen PRs for ${projectName}:\n`));
+
+  const spinner = ora('Fetching open PRs...').start();
+  const prs = getOpenPRs(projectRoot);
+  spinner.stop();
+
+  if (prs.length === 0) {
+    console.log(chalk.yellow('No open PRs found.'));
+    return;
+  }
+
+  // Build choices for checkbox prompt
+  const choices = prs.map((pr) => {
+    const issueTag = pr.issueNumber ? chalk.dim(` (issue #${pr.issueNumber})`) : '';
+    return {
+      name: `#${pr.number}\t${pr.title}${issueTag}`,
+      value: pr,
+      checked: false,
+    };
+  });
+
+  const { selected } = await inquirer.prompt([
+    {
+      type: 'checkbox',
+      name: 'selected',
+      message: 'Select PRs to review (space to toggle, enter to confirm):',
+      choices,
+    },
+  ]);
+
+  if (selected.length === 0) {
+    console.log(chalk.dim('No PRs selected.'));
+    return;
+  }
+
+  console.log();
+  console.log(chalk.cyan(`🔍 Starting ${selected.length} review session(s) in parallel...`));
+  console.log();
+
+  // Launch reviews in parallel
+  for (const pr of selected as OpenPR[]) {
+    await launchReviewForPR(pr, projectRoot, projectName);
+  }
+
+  console.log();
+  console.log(chalk.green(`✅ Started ${selected.length} review session(s)!`));
+  console.log(chalk.dim('   Each review is running in its own terminal window.'));
+}
+
+async function launchReviewForPR(
+  pr: OpenPR,
+  projectRoot: string,
+  projectName: string
+): Promise<void> {
+  const baseBranch = getDefaultBranch();
+  const branchName = pr.headRefName;
+  const worktreePath = path.join(path.dirname(projectRoot), `${projectName}-${branchName}`);
+
+  // Fetch latest
+  try {
+    execSync(`git fetch origin ${branchName} --quiet`, { cwd: projectRoot, stdio: 'pipe' });
+  } catch {
+    // Ignore fetch errors
+  }
+
+  // Check if worktree already exists
+  if (!fs.existsSync(worktreePath)) {
+    try {
+      if (branchExists(branchName)) {
+        execSync(`git worktree add "${worktreePath}" "${branchName}"`, {
+          cwd: projectRoot,
+          stdio: 'pipe',
+        });
+      } else {
+        execSync(`git worktree add "${worktreePath}" "origin/${branchName}"`, {
+          cwd: projectRoot,
+          stdio: 'pipe',
+        });
+      }
+
+      // Copy env files and symlink node_modules
+      copyEnvFiles(projectRoot, worktreePath);
+      symlinkNodeModules(projectRoot, worktreePath);
+    } catch (error) {
+      console.log(chalk.yellow(`⚠️  Could not create worktree for PR #${pr.number}`));
+      return;
+    }
+  } else {
+    // Pull latest changes
+    try {
+      execSync('git pull --quiet', { cwd: worktreePath, stdio: 'pipe' });
+    } catch {
+      // Ignore pull errors
+    }
+  }
+
+  // Get the diff for context
+  let diffContent = '';
+  try {
+    diffContent = execSync(`gh pr diff ${pr.number}`, {
+      cwd: projectRoot,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  } catch {
+    // Ignore diff errors
+  }
+
+  // Get issue body if we have an issue number
+  let issueBody = '';
+  if (pr.issueNumber) {
+    const issue = getIssue(pr.issueNumber);
+    if (issue) {
+      issueBody = issue.body;
+    }
+  }
+
+  // Build the review prompt
+  const prompt = `You are reviewing PR #${pr.number}: ${pr.title}
+${pr.issueNumber ? `\n## Related Issue #${pr.issueNumber}\n${issueBody}\n` : ''}
+## Your Task
+Review the code changes in this PR. Look for:
+1. Bugs and logic errors
+2. Security vulnerabilities
+3. Missing error handling
+4. Code quality issues
+5. Missing tests
+6. Performance problems
+
+## How to Leave Feedback
+Use the gh CLI to post review comments with suggestions. For each issue you find:
+
+\`\`\`bash
+gh pr review ${pr.number} --comment --body "**File: path/to/file.ts**
+
+Description of the issue...
+
+\\\`\\\`\\\`suggestion
+// Your suggested fix here
+\\\`\\\`\\\`
+"
+\`\`\`
+
+The \`suggestion\` code block will create a "Commit suggestion" button on GitHub.
+
+For a final review summary, use:
+\`\`\`bash
+gh pr review ${pr.number} --comment --body "## Review Summary
+
+- Issue 1: ...
+- Issue 2: ...
+
+Overall: [APPROVE/REQUEST_CHANGES/COMMENT]"
+\`\`\`
+
+Or to approve/request changes formally:
+\`\`\`bash
+gh pr review ${pr.number} --approve --body "LGTM! Code looks good."
+gh pr review ${pr.number} --request-changes --body "Please address the issues above."
+\`\`\`
+
+## PR Diff
+${diffContent ? `\n\`\`\`diff\n${diffContent.slice(0, 50000)}\n\`\`\`\n` : 'Run `gh pr diff ' + pr.number + '` to see the changes.'}
+
+Start by examining the diff and the changed files, then provide your review.`;
+
+  // Write prompt to a file
+  const promptFile = path.join(worktreePath, '.claude-review-prompt.txt');
+  fs.writeFileSync(promptFile, prompt);
+
+  // Create runner script for review
+  const runnerScript = path.join(worktreePath, '.claude-review-runner.sh');
+  const escapedTitle = pr.title.replace(/"/g, '\\"').slice(0, 50);
+  const runnerContent = `#!/bin/bash
+cd "${worktreePath}"
+
+# Set terminal title
+echo -ne "\\033]0;Review PR #${pr.number}: ${escapedTitle}\\007"
+
+echo "🔍 Claude Code Review - PR #${pr.number}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "${escapedTitle}"
+echo ""
+echo "Claude will review the PR and post suggestions."
+echo "You can commit suggestions directly on GitHub."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Run Claude interactively
+claude --dangerously-skip-permissions "$(cat '${promptFile}')"
+
+# Clean up prompt file
+rm -f '${promptFile}'
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Review session ended."
+echo ""
+echo "View PR: gh pr view ${pr.number} --web"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Keep terminal open
+exec bash
+`;
+
+  fs.writeFileSync(runnerScript, runnerContent, { mode: 0o755 });
+
+  console.log(chalk.dim(`   Starting review for PR #${pr.number}: ${pr.title.slice(0, 50)}...`));
+
+  openInNewTerminal(`'${runnerScript}'`);
 }

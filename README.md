@@ -128,8 +128,9 @@ claude-issue new "Fix crash" -l bug -l priority
 # Create PR for a solved issue (if you skipped it earlier)
 claude-issue pr 42
 
-# Review a PR with AI (posts suggestions you can commit on GitHub)
-claude-issue review 42
+# Review PRs with AI (posts suggestions you can commit on GitHub)
+claude-issue review          # Interactive: select PRs to review in parallel
+claude-issue review 42       # Review specific issue's PR
 
 # Clean up worktree and branch
 claude-issue clean 42        # Clean specific issue
@@ -155,7 +156,7 @@ claude-issue --help
 | `claude-issue list` | `ls` | List open issues |
 | `claude-issue show <number>` | - | Show full issue details |
 | `claude-issue pr <number>` | - | Create PR for solved issue |
-| `claude-issue review <number>` | - | Review PR with AI suggestions |
+| `claude-issue review [number]` | - | Review PRs with AI suggestions |
 | `claude-issue clean [number]` | `rm` | Remove worktree and branch |
 | `claude-issue go [number]` | - | Navigate to worktree |
 | `claude-issue init` | - | Setup wizard for requirements |

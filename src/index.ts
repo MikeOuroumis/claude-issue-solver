@@ -13,7 +13,7 @@ import { goCommand } from './commands/go';
 import { newCommand } from './commands/new';
 import { initCommand } from './commands/init';
 import { showCommand } from './commands/show';
-import { reviewCommand } from './commands/review';
+import { reviewCommand, selectReviewCommand } from './commands/review';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageJson = require('../package.json');
@@ -161,15 +161,19 @@ program
 
 // Review command - AI code review for PRs
 program
-  .command('review <issue>')
-  .description('Review a PR with Claude and post suggestions')
-  .action(async (issue: string) => {
-    const issueNumber = parseInt(issue, 10);
-    if (isNaN(issueNumber)) {
-      console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
-      process.exit(1);
+  .command('review [issue]')
+  .description('Review PRs with Claude and post suggestions')
+  .action(async (issue?: string) => {
+    if (issue) {
+      const issueNumber = parseInt(issue, 10);
+      if (isNaN(issueNumber)) {
+        console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
+        process.exit(1);
+      }
+      await reviewCommand(issueNumber);
+    } else {
+      await selectReviewCommand();
     }
-    await reviewCommand(issueNumber);
   });
 
 program.parse();
