@@ -4,8 +4,19 @@ import { getProjectName } from '../utils/git';
 
 function truncateBody(body: string, maxLength = 100): string {
   if (!body) return '';
-  // Take first line or truncate
-  const firstLine = body.split('\n')[0].trim();
+  // Find first meaningful line (skip markdown headers and empty lines)
+  const lines = body.split('\n');
+  let firstLine = '';
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Skip empty lines, markdown headers, and horizontal rules
+    if (!trimmed || trimmed.startsWith('#') || trimmed.match(/^-{3,}$|^_{3,}$|^\*{3,}$/)) {
+      continue;
+    }
+    firstLine = trimmed;
+    break;
+  }
+  if (!firstLine) return '';
   if (firstLine.length <= maxLength) return firstLine;
   return firstLine.substring(0, maxLength - 3) + '...';
 }
