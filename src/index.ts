@@ -13,6 +13,7 @@ import { goCommand } from './commands/go';
 import { newCommand } from './commands/new';
 import { initCommand } from './commands/init';
 import { showCommand } from './commands/show';
+import { reviewCommand } from './commands/review';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageJson = require('../package.json');
@@ -156,6 +157,19 @@ program
   .description('Check and install requirements (gh, claude-code)')
   .action(async () => {
     await initCommand();
+  });
+
+// Review command - AI code review for PRs
+program
+  .command('review <issue>')
+  .description('Review a PR with Claude and post suggestions')
+  .action(async (issue: string) => {
+    const issueNumber = parseInt(issue, 10);
+    if (isNaN(issueNumber)) {
+      console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
+      process.exit(1);
+    }
+    await reviewCommand(issueNumber);
   });
 
 program.parse();

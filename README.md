@@ -59,6 +59,7 @@ Starting 2 issue(s)...
 - ✨ **Create and solve** - Create new issues and start solving them immediately
 - 🌿 **Worktree isolation** - Each issue gets its own worktree, work on multiple issues in parallel
 - 🤖 **Real-time PR creation** - Automatically creates/updates PR as Claude commits changes
+- 🔍 **AI code review** - Review PRs with Claude, posts suggestions you can commit directly on GitHub
 - 🧹 **Smart cleanup** - Auto-clean merged PRs, close VS Code/terminal windows on macOS
 - 📁 **Monorepo support** - Recursively copies all `.env*` files, symlinks `node_modules`
 - 💻 **Cross-platform terminals** - iTerm2, Terminal.app (macOS), gnome-terminal, xterm, konsole (Linux)
@@ -127,6 +128,9 @@ claude-issue new "Fix crash" -l bug -l priority
 # Create PR for a solved issue (if you skipped it earlier)
 claude-issue pr 42
 
+# Review a PR with AI (posts suggestions you can commit on GitHub)
+claude-issue review 42
+
 # Clean up worktree and branch
 claude-issue clean 42        # Clean specific issue
 claude-issue clean           # Interactive selection
@@ -151,6 +155,7 @@ claude-issue --help
 | `claude-issue list` | `ls` | List open issues |
 | `claude-issue show <number>` | - | Show full issue details |
 | `claude-issue pr <number>` | - | Create PR for solved issue |
+| `claude-issue review <number>` | - | Review PR with AI suggestions |
 | `claude-issue clean [number]` | `rm` | Remove worktree and branch |
 | `claude-issue go [number]` | - | Navigate to worktree |
 | `claude-issue init` | - | Setup wizard for requirements |
