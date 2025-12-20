@@ -2,49 +2,57 @@ import chalk from 'chalk';
 import { listIssues, getIssuesWithOpenPRs } from '../utils/github';
 import { getProjectName } from '../utils/git';
 
-function getFirstParagraph(body: string): string {
-  if (!body) return '';
+function formatBody(body: string, indent: string, termWidth: number): string[] {
+  if (!body) return [];
   const lines = body.split('\n');
-  const paragraphLines: string[] = [];
-  let started = false;
+  const output: string[] = [];
+  const textWidth = termWidth - indent.length - 2;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    // Skip markdown headers and horizontal rules
-    if (trimmed.startsWith('#') || trimmed.match(/^-{3,}$|^_{3,}$|^\*{3,}$/)) {
+
+    if (!trimmed) {
+      // Preserve blank lines
+      output.push('');
       continue;
     }
-    // Empty line after we started means end of paragraph
-    if (!trimmed && started) {
-      break;
-    }
-    if (trimmed) {
-      started = true;
-      paragraphLines.push(trimmed);
-    }
-  }
-  return paragraphLines.join(' ');
-}
 
-function wrapText(text: string, width: number, indent: string): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let currentLine = '';
+    // Handle markdown headers - make them stand out
+    if (trimmed.startsWith('#')) {
+      const headerText = trimmed.replace(/^#+\s*/, '');
+      output.push(indent + headerText);
+      continue;
+    }
 
-  for (const word of words) {
-    if (!currentLine) {
-      currentLine = word;
-    } else if (currentLine.length + 1 + word.length <= width) {
-      currentLine += ' ' + word;
+    // Handle list items
+    if (trimmed.match(/^[-*]\s/) || trimmed.match(/^\d+\.\s/)) {
+      output.push(indent + '  ' + trimmed);
+      continue;
+    }
+
+    // Word wrap regular text
+    if (trimmed.length <= textWidth) {
+      output.push(indent + trimmed);
     } else {
-      lines.push(indent + currentLine);
-      currentLine = word;
+      const words = trimmed.split(/\s+/);
+      let currentLine = '';
+      for (const word of words) {
+        if (!currentLine) {
+          currentLine = word;
+        } else if (currentLine.length + 1 + word.length <= textWidth) {
+          currentLine += ' ' + word;
+        } else {
+          output.push(indent + currentLine);
+          currentLine = word;
+        }
+      }
+      if (currentLine) {
+        output.push(indent + currentLine);
+      }
     }
   }
-  if (currentLine) {
-    lines.push(indent + currentLine);
-  }
-  return lines;
+
+  return output;
 }
 
 export async function listCommand(options: { verbose?: boolean } = {}): Promise<void> {
@@ -68,17 +76,13 @@ export async function listCommand(options: { verbose?: boolean } = {}): Promise<
     console.log(`  ${chalk.cyan(`#${issue.number}`)}\t${issue.title}${prTag}${labels}`);
 
     if (options.verbose && issue.body) {
-      const paragraph = getFirstParagraph(issue.body);
-      if (paragraph) {
-        const termWidth = process.stdout.columns || 80;
-        const indent = '        ';
-        const textWidth = termWidth - indent.length - 2;
-        const wrappedLines = wrapText(paragraph, textWidth, indent);
-        for (const line of wrappedLines) {
-          console.log(chalk.dim(line));
-        }
-        console.log(); // blank line between issues
+      const termWidth = process.stdout.columns || 80;
+      const indent = '        ';
+      const formattedLines = formatBody(issue.body, indent, termWidth);
+      for (const line of formattedLines) {
+        console.log(chalk.dim(line));
       }
+      console.log(); // blank line between issues
     }
   }
   console.log();
