@@ -234,33 +234,37 @@ export async function cleanAllCommand(): Promise<void> {
 
   console.log(chalk.bold('\n🧹 Found issue worktrees:\n'));
 
-  for (const wt of worktreesWithStatus) {
+  // Build choices for checkbox prompt
+  const choices = worktreesWithStatus.map((wt) => {
     const status = getStatusLabel(wt);
-    console.log(`  ${chalk.cyan(`#${wt.issueNumber}`)}\t${status}`);
-    if (wt.branch) {
-      console.log(chalk.dim(`  \t${wt.branch}`));
-    }
-    console.log(chalk.dim(`  \t${wt.path}`));
-    console.log();
-  }
+    const isMerged = wt.prStatus?.state === 'merged';
+    return {
+      name: `#${wt.issueNumber}\t${status}`,
+      value: wt.issueNumber,
+      checked: isMerged, // Pre-select merged PRs
+    };
+  });
 
-  const { confirm } = await inquirer.prompt([
+  const { selected } = await inquirer.prompt([
     {
-      type: 'confirm',
-      name: 'confirm',
-      message: `Remove all ${worktrees.length} worktree(s) and delete branches?`,
-      default: false,
+      type: 'checkbox',
+      name: 'selected',
+      message: 'Select worktrees to clean (space to toggle, enter to confirm):',
+      choices,
     },
   ]);
 
-  if (!confirm) {
-    console.log(chalk.dim('Cancelled.'));
+  if (selected.length === 0) {
+    console.log(chalk.dim('No worktrees selected.'));
     return;
   }
 
+  // Filter to only selected worktrees
+  const selectedWorktrees = worktrees.filter((wt) => selected.includes(wt.issueNumber));
+
   console.log();
 
-  for (const wt of worktrees) {
+  for (const wt of selectedWorktrees) {
     const spinner = ora(`Cleaning issue #${wt.issueNumber}...`).start();
 
     try {
@@ -342,7 +346,7 @@ export async function cleanAllCommand(): Promise<void> {
   execSync('git worktree prune', { cwd: projectRoot, stdio: 'pipe' });
 
   console.log();
-  console.log(chalk.green(`✅ Cleaned up ${worktrees.length} issue worktree(s)!`));
+  console.log(chalk.green(`✅ Cleaned up ${selectedWorktrees.length} issue worktree(s)!`));
 }
 
 export async function cleanCommand(issueNumber: number): Promise<void> {
