@@ -2,23 +2,49 @@ import chalk from 'chalk';
 import { listIssues, getIssuesWithOpenPRs } from '../utils/github';
 import { getProjectName } from '../utils/git';
 
-function truncateBody(body: string, maxLength = 100): string {
+function getFirstParagraph(body: string): string {
   if (!body) return '';
-  // Find first meaningful line (skip markdown headers and empty lines)
   const lines = body.split('\n');
-  let firstLine = '';
+  const paragraphLines: string[] = [];
+  let started = false;
+
   for (const line of lines) {
     const trimmed = line.trim();
-    // Skip empty lines, markdown headers, and horizontal rules
-    if (!trimmed || trimmed.startsWith('#') || trimmed.match(/^-{3,}$|^_{3,}$|^\*{3,}$/)) {
+    // Skip markdown headers and horizontal rules
+    if (trimmed.startsWith('#') || trimmed.match(/^-{3,}$|^_{3,}$|^\*{3,}$/)) {
       continue;
     }
-    firstLine = trimmed;
-    break;
+    // Empty line after we started means end of paragraph
+    if (!trimmed && started) {
+      break;
+    }
+    if (trimmed) {
+      started = true;
+      paragraphLines.push(trimmed);
+    }
   }
-  if (!firstLine) return '';
-  if (firstLine.length <= maxLength) return firstLine;
-  return firstLine.substring(0, maxLength - 3) + '...';
+  return paragraphLines.join(' ');
+}
+
+function wrapText(text: string, width: number, indent: string): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    if (!currentLine) {
+      currentLine = word;
+    } else if (currentLine.length + 1 + word.length <= width) {
+      currentLine += ' ' + word;
+    } else {
+      lines.push(indent + currentLine);
+      currentLine = word;
+    }
+  }
+  if (currentLine) {
+    lines.push(indent + currentLine);
+  }
+  return lines;
 }
 
 export async function listCommand(options: { verbose?: boolean } = {}): Promise<void> {
@@ -42,9 +68,16 @@ export async function listCommand(options: { verbose?: boolean } = {}): Promise<
     console.log(`  ${chalk.cyan(`#${issue.number}`)}\t${issue.title}${prTag}${labels}`);
 
     if (options.verbose && issue.body) {
-      const truncated = truncateBody(issue.body);
-      if (truncated) {
-        console.log(chalk.dim(`  \t${truncated}`));
+      const paragraph = getFirstParagraph(issue.body);
+      if (paragraph) {
+        const termWidth = process.stdout.columns || 80;
+        const indent = '        ';
+        const textWidth = termWidth - indent.length - 2;
+        const wrappedLines = wrapText(paragraph, textWidth, indent);
+        for (const line of wrappedLines) {
+          console.log(chalk.dim(line));
+        }
+        console.log(); // blank line between issues
       }
     }
   }
