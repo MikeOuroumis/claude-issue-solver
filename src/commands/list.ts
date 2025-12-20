@@ -55,15 +55,22 @@ function formatBody(body: string, indent: string, termWidth: number): string[] {
   return output;
 }
 
-export async function listCommand(options: { verbose?: boolean } = {}): Promise<void> {
+export async function listCommand(options: { verbose?: boolean; limit?: number; all?: boolean } = {}): Promise<void> {
   const projectName = getProjectName();
   console.log(chalk.bold(`\nOpen issues for ${projectName}:\n`));
 
-  const issues = listIssues();
+  const limit = options.all ? 0 : (options.limit ?? 50);
+  const issues = listIssues(limit);
 
   if (issues.length === 0) {
     console.log(chalk.yellow('No open issues found.'));
     return;
+  }
+
+  // Show hint if we hit the limit and user didn't explicitly set options
+  const hitLimit = !options.all && !options.limit && issues.length === limit;
+  if (hitLimit) {
+    console.log(chalk.dim(`  Showing first ${limit} issues. Use --limit <n> or --all to see more.\n`));
   }
 
   const issuesWithPRs = getIssuesWithOpenPRs();

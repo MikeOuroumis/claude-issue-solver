@@ -67,10 +67,11 @@ export function getIssue(issueNumber: number): Issue | null {
   }
 }
 
-export function listIssues(limit = 20): IssueListItem[] {
+export function listIssues(limit = 50): IssueListItem[] {
   try {
+    const limitArg = limit > 0 ? `--limit ${limit}` : '';
     const output = execSync(
-      `gh issue list --state open --limit ${limit} --json number,title,body,labels`,
+      `gh issue list --state open ${limitArg} --json number,title,body,labels`,
       { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
     return JSON.parse(output);

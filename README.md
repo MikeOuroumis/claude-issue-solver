@@ -159,6 +159,8 @@ claude-issue --help
 
 **`list` command:**
 - `--verbose` - Show issue descriptions
+- `-n, --limit <number>` - Maximum issues to show (default: 50)
+- `--all` - Show all issues (no limit)
 
 **`new` command:**
 - `-b, --body <text>` - Issue description

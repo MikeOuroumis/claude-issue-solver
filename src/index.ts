@@ -72,7 +72,9 @@ program
   .alias('ls')
   .description('List open issues')
   .option('--verbose', 'Show issue descriptions')
-  .action((options: { verbose?: boolean }) => listCommand(options));
+  .option('-n, --limit <number>', 'Maximum number of issues to show', (val) => parseInt(val, 10))
+  .option('--all', 'Show all issues (no limit)')
+  .action((options: { verbose?: boolean; limit?: number; all?: boolean }) => listCommand(options));
 
 // Show command
 program
