@@ -16,15 +16,33 @@ npm link           # Install locally for testing as `claude-issue` or `cis`
 
 ## Releasing
 
-Use the release script to publish new versions:
+Since the release script requires interactive input, do the release steps manually:
 
 ```bash
-npm run release              # Interactive prompts for version, title, changelog
-npm run release 1.15.0       # Specify version directly
-npm run release 1.15.0 "Feature name"  # Version + release title
+# 1. Update version in package.json
+# 2. Build and commit
+npm run build
+git add -A
+git commit -m "feat: description of changes"
+git add package.json
+git commit -m "X.Y.Z"  # version number only
+
+# 3. Tag and push
+git tag "vX.Y.Z"
+git push origin main
+git push origin "vX.Y.Z"
+
+# 4. Publish to npm
+npm publish
+
+# 5. Create GitHub release
+gh release create "vX.Y.Z" --title "vX.Y.Z - Release title" --notes "### What's New
+
+- Feature 1
+- Feature 2"
 ```
 
-The script handles: version bump in package.json, build, git commit, git tag, push, npm publish, and GitHub release creation.
+All 5 steps are required for a complete release. Do not skip the GitHub release step.
 
 ## Architecture
 
