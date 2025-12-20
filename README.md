@@ -114,6 +114,10 @@ claude-issue 42
 # List open issues
 claude-issue list
 claude-issue ls
+claude-issue list -v   # Show descriptions
+
+# Show full issue details
+claude-issue show 42
 
 # Create a new issue and solve it immediately
 claude-issue new "Add dark mode support"
@@ -145,12 +149,16 @@ claude-issue --help
 | `claude-issue <number>` | - | Solve specific issue |
 | `claude-issue new <title>` | - | Create issue and solve it |
 | `claude-issue list` | `ls` | List open issues |
+| `claude-issue show <number>` | - | Show full issue details |
 | `claude-issue pr <number>` | - | Create PR for solved issue |
 | `claude-issue clean [number]` | `rm` | Remove worktree and branch |
 | `claude-issue go [number]` | - | Navigate to worktree |
 | `claude-issue init` | - | Setup wizard for requirements |
 
 ### Command Options
+
+**`list` command:**
+- `-v, --verbose` - Show issue descriptions
 
 **`new` command:**
 - `-b, --body <text>` - Issue description

@@ -18,6 +18,7 @@ export interface Label {
 export interface IssueListItem {
   number: number;
   title: string;
+  body: string;
   labels: Label[];
 }
 
@@ -69,7 +70,7 @@ export function getIssue(issueNumber: number): Issue | null {
 export function listIssues(limit = 20): IssueListItem[] {
   try {
     const output = execSync(
-      `gh issue list --state open --limit ${limit} --json number,title,labels`,
+      `gh issue list --state open --limit ${limit} --json number,title,body,labels`,
       { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
     return JSON.parse(output);

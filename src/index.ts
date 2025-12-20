@@ -12,6 +12,7 @@ import { selectCommand } from './commands/select';
 import { goCommand } from './commands/go';
 import { newCommand } from './commands/new';
 import { initCommand } from './commands/init';
+import { showCommand } from './commands/show';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageJson = require('../package.json');
@@ -70,7 +71,21 @@ program
   .command('list')
   .alias('ls')
   .description('List open issues')
-  .action(listCommand);
+  .option('-v, --verbose', 'Show issue descriptions')
+  .action((options: { verbose?: boolean }) => listCommand(options));
+
+// Show command
+program
+  .command('show <issue>')
+  .description('Show full details of an issue')
+  .action(async (issue: string) => {
+    const issueNumber = parseInt(issue, 10);
+    if (isNaN(issueNumber)) {
+      console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
+      process.exit(1);
+    }
+    await showCommand(issueNumber);
+  });
 
 // PR command
 program
