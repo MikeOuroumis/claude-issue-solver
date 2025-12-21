@@ -138,10 +138,10 @@ Review the code changes in this PR. Look for:
 6. Performance problems
 
 ## How to Leave Feedback
-Use the gh CLI to post review comments with suggestions. For each issue you find:
+Use the gh CLI to post comments with suggestions. For each issue you find:
 
 \`\`\`bash
-gh pr review ${prNumber} --comment --body "**File: path/to/file.ts**
+gh pr comment ${prNumber} --body "**File: path/to/file.ts**
 
 Description of the issue...
 
@@ -153,21 +153,16 @@ Description of the issue...
 
 The \`suggestion\` code block will create a "Commit suggestion" button on GitHub.
 
-For a final review summary, use:
+For a final review summary:
 \`\`\`bash
-gh pr review ${prNumber} --comment --body "## Review Summary
+gh pr comment ${prNumber} --body "## Review Summary
 
 - Issue 1: ...
 - Issue 2: ...
-
-Overall: [APPROVE/REQUEST_CHANGES/COMMENT]"
+"
 \`\`\`
 
-Or to approve/request changes formally:
-\`\`\`bash
-gh pr review ${prNumber} --approve --body "LGTM! Code looks good."
-gh pr review ${prNumber} --request-changes --body "Please address the issues above."
-\`\`\`
+Note: You cannot approve or request changes on your own PR. Just post suggestions as comments.
 
 ## PR Diff
 ${diffContent ? `\n\`\`\`diff\n${diffContent.slice(0, 50000)}\n\`\`\`\n` : 'Run `gh pr diff ' + prNumber + '` to see the changes.'}
@@ -402,10 +397,10 @@ Review the code changes in this PR. Look for:
 6. Performance problems
 
 ## How to Leave Feedback
-Use the gh CLI to post review comments with suggestions. For each issue you find:
+Use the gh CLI to post comments with suggestions. For each issue you find:
 
 \`\`\`bash
-gh pr review ${pr.number} --comment --body "**File: path/to/file.ts**
+gh pr comment ${pr.number} --body "**File: path/to/file.ts**
 
 Description of the issue...
 
@@ -417,21 +412,16 @@ Description of the issue...
 
 The \`suggestion\` code block will create a "Commit suggestion" button on GitHub.
 
-For a final review summary, use:
+For a final review summary:
 \`\`\`bash
-gh pr review ${pr.number} --comment --body "## Review Summary
+gh pr comment ${pr.number} --body "## Review Summary
 
 - Issue 1: ...
 - Issue 2: ...
-
-Overall: [APPROVE/REQUEST_CHANGES/COMMENT]"
+"
 \`\`\`
 
-Or to approve/request changes formally:
-\`\`\`bash
-gh pr review ${pr.number} --approve --body "LGTM! Code looks good."
-gh pr review ${pr.number} --request-changes --body "Please address the issues above."
-\`\`\`
+Note: You cannot approve or request changes on your own PR. Just post suggestions as comments.
 
 ## PR Diff
 ${diffContent ? `\n\`\`\`diff\n${diffContent.slice(0, 50000)}\n\`\`\`\n` : 'Run `gh pr diff ' + pr.number + '` to see the changes.'}
