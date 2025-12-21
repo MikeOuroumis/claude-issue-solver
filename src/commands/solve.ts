@@ -107,14 +107,15 @@ echo -ne "\\033]0;Issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"').slic
 echo "🤖 Claude Code - Issue #${issueNumber}: ${issue.title}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-${autoMode ? 'echo "🔄 AUTO MODE: Will solve → review → fix until approved (max 3 iterations)"' : 'echo "When Claude commits, a PR will be created automatically."'}
+${autoMode ? `echo "🔄 AUTO MODE: Fully autonomous solve → review → fix loop"
+echo "   Max 3 iterations. No user input required."
+${!botToken ? 'echo "⚠️  No bot token configured. Run: cis config bot-token"' : ''}` : 'echo "When Claude commits, a PR will be created automatically."'}
 echo "The terminal stays open for follow-up changes."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
 ${botToken ? `# Bot token for reviews (only used during review, not PR creation)
 export BOT_TOKEN="${botToken}"
-# DO NOT set GH_TOKEN here - PR should be created as you, not the bot
 ` : ''}
 
 # Function to create PR
@@ -186,39 +187,33 @@ get_review_status() {
   gh pr view "$1" --json reviewDecision --jq '.reviewDecision' 2>/dev/null
 }
 
-# Watch for new commits in background and create PR
-LAST_COMMIT=""
-while true; do
-  CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null)
-  if [ "$CURRENT_COMMIT" != "$LAST_COMMIT" ] && [ -n "$LAST_COMMIT" ]; then
-    create_pr > /dev/null
-  fi
-  LAST_COMMIT="$CURRENT_COMMIT"
-  sleep 2
-done &
-WATCHER_PID=$!
+${autoMode ? `# AUTO MODE: Non-interactive solve → review → fix loop
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📝 STEP 1: Solving issue..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 
-# Run Claude interactively (read prompt from file to avoid shell escaping issues)
-claude --dangerously-skip-permissions "$(cat '${promptFile}')"
+# Run Claude non-interactively to solve
+claude -p --dangerously-skip-permissions "$(cat '${promptFile}')"
 
 # Clean up prompt file
 rm -f '${promptFile}'
 
-# Kill the watcher
-kill $WATCHER_PID 2>/dev/null
+# Create PR
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📤 Creating PR..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+create_pr
 
-# Final PR check after Claude exits
-create_pr > /dev/null
-
-${autoMode ? `
-# AUTO MODE: Review loop
+# Review loop
 MAX_ITERATIONS=3
 ITERATION=0
 
 while [ $ITERATION -lt $MAX_ITERATIONS ]; do
   ITERATION=$((ITERATION + 1))
 
-  # Wait for PR to be created
   sleep 2
   PR_NUM=$(get_pr_number)
 
@@ -230,59 +225,57 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
 
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "🔍 AUTO-REVIEW: Iteration $ITERATION of $MAX_ITERATIONS"
+  echo "🔍 STEP 2: Review iteration $ITERATION of $MAX_ITERATIONS"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
 
   # Get PR diff for review
   PR_DIFF=$(gh pr diff $PR_NUM 2>/dev/null | head -500)
 
-  # Create review prompt
-  REVIEW_PROMPT="You are reviewing PR #$PR_NUM for issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"')}
+  # Write review prompt to file (avoid escaping issues)
+  REVIEW_FILE=".claude-review-prompt.txt"
+  cat > "$REVIEW_FILE" << 'REVIEW_EOF'
+You are reviewing a PR. Your task is to review the code and leave feedback using the gh CLI.
 
-## Issue Description
-${issue.body.replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/\`/g, '\\`')}
+IMPORTANT: You must run ONE of these commands before finishing:
+${botToken ? `
+To APPROVE (if code looks good):
+GH_TOKEN=$BOT_TOKEN gh pr review PR_NUM --approve --body "LGTM! Code looks good."
 
-## Your Task
-Review the code changes in this PR. Look for:
-1. Bugs and logic errors
-2. Security vulnerabilities
-3. Missing error handling
-4. Code quality issues
-5. Performance problems
+To REQUEST CHANGES (if issues found):
+GH_TOKEN=$BOT_TOKEN gh pr review PR_NUM --request-changes --body "Your detailed feedback here"
+` : `
+To APPROVE (if code looks good):
+gh pr review PR_NUM --approve --body "LGTM! Code looks good."
 
-## How to Leave Feedback
-${botToken ? `Use GH_TOKEN=\\$BOT_TOKEN prefix for all gh commands.
-
-If the code looks good:
-\\\`\\\`\\\`bash
-GH_TOKEN=\\$BOT_TOKEN gh pr review $PR_NUM --approve --body \\"LGTM! Code looks good.\\"
-\\\`\\\`\\\`
-
-If changes are needed:
-\\\`\\\`\\\`bash
-GH_TOKEN=\\$BOT_TOKEN gh pr review $PR_NUM --request-changes --body \\"<your feedback>\\"
-\\\`\\\`\\\`
-` : `If the code looks good:
-\\\`\\\`\\\`bash
-gh pr review $PR_NUM --approve --body \\"LGTM! Code looks good.\\"
-\\\`\\\`\\\`
-
-If changes are needed:
-\\\`\\\`\\\`bash
-gh pr review $PR_NUM --request-changes --body \\"<your feedback>\\"
-\\\`\\\`\\\`
+To REQUEST CHANGES (if issues found):
+gh pr review PR_NUM --request-changes --body "Your detailed feedback here"
 `}
+Review criteria:
+1. Does the code solve the issue correctly?
+2. Are there bugs or logic errors?
+3. Security vulnerabilities?
+4. Missing error handling?
+5. Code quality issues?
 
-## PR Diff (first 500 lines)
-\\\`\\\`\\\`diff
-$PR_DIFF
-\\\`\\\`\\\`
+REVIEW_EOF
 
-Review the code and either approve or request changes."
+  # Append issue and diff info
+  echo "" >> "$REVIEW_FILE"
+  echo "## Issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"')}" >> "$REVIEW_FILE"
+  echo "${issue.body.replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/\`/g, '\\`')}" >> "$REVIEW_FILE"
+  echo "" >> "$REVIEW_FILE"
+  echo "## PR Diff:" >> "$REVIEW_FILE"
+  echo "\\\`\\\`\\\`diff" >> "$REVIEW_FILE"
+  echo "$PR_DIFF" >> "$REVIEW_FILE"
+  echo "\\\`\\\`\\\`" >> "$REVIEW_FILE"
 
-  # Run Claude for review
-  claude --dangerously-skip-permissions "$REVIEW_PROMPT"
+  # Replace PR_NUM placeholder
+  sed -i '' "s/PR_NUM/$PR_NUM/g" "$REVIEW_FILE" 2>/dev/null || sed -i "s/PR_NUM/$PR_NUM/g" "$REVIEW_FILE"
+
+  # Run Claude for review (non-interactive)
+  claude -p --dangerously-skip-permissions "$(cat "$REVIEW_FILE")"
+  rm -f "$REVIEW_FILE"
 
   # Check review status
   sleep 2
@@ -302,22 +295,27 @@ Review the code and either approve or request changes."
     if [ $ITERATION -lt $MAX_ITERATIONS ]; then
       echo ""
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "🔧 Changes requested. Claude will fix them..."
+      echo "🔧 STEP 3: Fixing requested changes..."
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
 
       # Get the review comments
       REVIEW_COMMENTS=$(gh pr view $PR_NUM --json reviews --jq '.reviews[-1].body' 2>/dev/null)
 
-      FIX_PROMPT="The code review requested changes. Please fix them:
+      # Write fix prompt to file
+      FIX_FILE=".claude-fix-prompt.txt"
+      cat > "$FIX_FILE" << FIX_EOF
+The code review requested changes. Please fix them and commit.
 
 ## Review Feedback
 $REVIEW_COMMENTS
 
-Please address the feedback above, make the necessary changes, and commit them."
+Please address the feedback above, make the necessary changes, and commit them.
+FIX_EOF
 
-      # Run Claude to fix
-      claude --dangerously-skip-permissions "$FIX_PROMPT"
+      # Run Claude to fix (non-interactive)
+      claude -p --dangerously-skip-permissions "$(cat "$FIX_FILE")"
+      rm -f "$FIX_FILE"
 
       # Push changes
       git push origin "${branchName}" 2>/dev/null
@@ -336,7 +334,30 @@ Please address the feedback above, make the necessary changes, and commit them."
     break
   fi
 done
-` : ''}
+` : `# INTERACTIVE MODE: Watch for commits and create PR automatically
+LAST_COMMIT=""
+while true; do
+  CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null)
+  if [ "$CURRENT_COMMIT" != "$LAST_COMMIT" ] && [ -n "$LAST_COMMIT" ]; then
+    create_pr > /dev/null
+  fi
+  LAST_COMMIT="$CURRENT_COMMIT"
+  sleep 2
+done &
+WATCHER_PID=$!
+
+# Run Claude interactively
+claude --dangerously-skip-permissions "$(cat '${promptFile}')"
+
+# Clean up prompt file
+rm -f '${promptFile}'
+
+# Kill the watcher
+kill $WATCHER_PID 2>/dev/null
+
+# Final PR check after Claude exits
+create_pr > /dev/null
+`}
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
