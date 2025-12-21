@@ -24,17 +24,22 @@ export interface IssueListItem {
 
 export function createIssue(title: string, body?: string, labels?: string[]): number | null {
   try {
-    let cmd = `gh issue create --title "${title.replace(/"/g, '\\"')}"`;
+    // Build args array to avoid shell escaping issues
+    const args = ['issue', 'create', '--title', title];
 
     if (body) {
-      cmd += ` --body "${body.replace(/"/g, '\\"')}"`;
+      args.push('--body', body);
     }
 
     if (labels && labels.length > 0) {
       for (const label of labels) {
-        cmd += ` --label "${label.replace(/"/g, '\\"')}"`;
+        args.push('--label', label);
       }
     }
+
+    // Use spawn-like approach with shell: false would be ideal, but execSync doesn't support it well
+    // Instead, use -- to prevent argument parsing issues and proper quoting
+    const cmd = `gh ${args.map(arg => `'${arg.replace(/'/g, "'\\''")}'`).join(' ')}`;
 
     const output = execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
 
@@ -44,7 +49,11 @@ export function createIssue(title: string, body?: string, labels?: string[]): nu
       return parseInt(match[1], 10);
     }
     return null;
-  } catch {
+  } catch (error: any) {
+    // Log error for debugging
+    if (process.env.DEBUG) {
+      console.error('createIssue error:', error.stderr?.toString() || error.message);
+    }
     return null;
   }
 }
