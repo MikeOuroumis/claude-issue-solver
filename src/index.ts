@@ -15,6 +15,7 @@ import { initCommand } from './commands/init';
 import { showCommand } from './commands/show';
 import { reviewCommand, selectReviewCommand } from './commands/review';
 import { configCommand } from './commands/config';
+import { mergeCommand } from './commands/merge';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageJson = require('../package.json');
@@ -183,6 +184,14 @@ program
   .description('Manage configuration (bot-token, --clear)')
   .action(async (action?: string, value?: string) => {
     await configCommand(action, value);
+  });
+
+// Merge command - merge PRs and clean up
+program
+  .command('merge')
+  .description('Merge approved PRs and clean up worktrees')
+  .action(async () => {
+    await mergeCommand();
   });
 
 program.parse();

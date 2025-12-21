@@ -132,6 +132,9 @@ claude-issue pr 42
 claude-issue review          # Interactive: select PRs to review in parallel
 claude-issue review 42       # Review specific issue's PR
 
+# Merge approved PRs and clean up worktrees
+claude-issue merge           # Interactive: select PRs to merge
+
 # Clean up worktree and branch
 claude-issue clean 42        # Clean specific issue
 claude-issue clean           # Interactive selection
@@ -157,6 +160,7 @@ claude-issue --help
 | `claude-issue show <number>` | - | Show full issue details |
 | `claude-issue pr <number>` | - | Create PR for solved issue |
 | `claude-issue review [number]` | - | Review PRs with AI suggestions |
+| `claude-issue merge` | - | Merge approved PRs and clean up |
 | `claude-issue config` | - | Manage settings (bot token) |
 | `claude-issue clean [number]` | `rm` | Remove worktree and branch |
 | `claude-issue go [number]` | - | Navigate to worktree |
