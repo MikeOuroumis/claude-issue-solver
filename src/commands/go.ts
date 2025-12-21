@@ -9,6 +9,11 @@ interface Worktree {
   issueNumber: string;
 }
 
+interface PRInfo {
+  url: string;
+  reviewDecision: string | null;
+}
+
 function getIssueWorktrees(): Worktree[] {
   const projectRoot = getProjectRoot();
   const projectName = getProjectName();
@@ -44,15 +49,33 @@ function getIssueWorktrees(): Worktree[] {
   return worktrees;
 }
 
-function getPRForBranch(branch: string): string | null {
+function getPRForBranch(branch: string): PRInfo | null {
   try {
-    const output = execSync(`gh pr list --head "${branch}" --json url --jq '.[0].url'`, {
+    const output = execSync(`gh pr list --head "${branch}" --json url,reviewDecision --jq '.[0]'`, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
-    return output || null;
+    if (!output || output === 'null') return null;
+    const data = JSON.parse(output);
+    return {
+      url: data.url,
+      reviewDecision: data.reviewDecision,
+    };
   } catch {
     return null;
+  }
+}
+
+function getReviewStatusLabel(reviewDecision: string | null): string {
+  switch (reviewDecision) {
+    case 'APPROVED':
+      return chalk.green('✓ Approved');
+    case 'CHANGES_REQUESTED':
+      return chalk.red('✗ Changes requested');
+    case 'REVIEW_REQUIRED':
+      return chalk.yellow('○ Review required');
+    default:
+      return chalk.dim('○ No reviews');
   }
 }
 
@@ -80,17 +103,28 @@ export async function goCommand(issueNumber?: number): Promise<void> {
     }
     selectedWorktree = found;
   } else {
-    // Show selection
+    // Show selection with PR status
     console.log(chalk.bold('\n📂 Issue worktrees:\n'));
 
-    const choices = worktrees.map((wt) => ({
-      name: `#${wt.issueNumber}\t${wt.branch}`,
-      value: wt,
+    // Fetch PR info for all worktrees
+    const worktreesWithPR = worktrees.map((wt) => ({
+      ...wt,
+      prInfo: getPRForBranch(wt.branch),
     }));
+
+    const choices = worktreesWithPR.map((wt) => {
+      const statusTag = wt.prInfo
+        ? getReviewStatusLabel(wt.prInfo.reviewDecision)
+        : chalk.dim('No PR');
+      return {
+        name: `#${wt.issueNumber}\t${wt.branch}\t${statusTag}`,
+        value: wt,
+      };
+    });
 
     choices.push({
       name: chalk.dim('Cancel'),
-      value: null as unknown as Worktree,
+      value: null as any,
     });
 
     const { selected } = await inquirer.prompt([
@@ -112,14 +146,15 @@ export async function goCommand(issueNumber?: number): Promise<void> {
   }
 
   // Get PR info
-  const prUrl = getPRForBranch(selectedWorktree.branch);
+  const prInfo = getPRForBranch(selectedWorktree.branch);
 
   console.log();
   console.log(chalk.bold(`📂 Issue #${selectedWorktree.issueNumber}`));
   console.log(chalk.dim(`   Path: ${selectedWorktree.path}`));
   console.log(chalk.dim(`   Branch: ${selectedWorktree.branch}`));
-  if (prUrl) {
-    console.log(chalk.cyan(`   PR: ${prUrl}`));
+  if (prInfo) {
+    console.log(chalk.cyan(`   PR: ${prInfo.url}`));
+    console.log(`   Status: ${getReviewStatusLabel(prInfo.reviewDecision)}`);
   }
   console.log();
 
@@ -130,7 +165,7 @@ export async function goCommand(issueNumber?: number): Promise<void> {
     { name: '💻 Print cd command', value: 'cd' },
   ];
 
-  if (prUrl) {
+  if (prInfo) {
     actions.unshift({ name: '🔗 Open PR in browser', value: 'pr' });
   }
 
@@ -148,7 +183,7 @@ export async function goCommand(issueNumber?: number): Promise<void> {
   switch (action) {
     case 'pr':
       console.log(chalk.dim(`\nOpening PR in browser...`));
-      execSync(`open "${prUrl}"`, { stdio: 'pipe' });
+      execSync(`open "${prInfo!.url}"`, { stdio: 'pipe' });
       break;
     case 'vscode':
       console.log(chalk.dim(`\nOpening in VS Code...`));
