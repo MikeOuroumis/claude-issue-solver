@@ -241,6 +241,13 @@ export async function mergeCommand(): Promise<void> {
     const prSpinner = ora(`Merging PR #${pr.number}...`).start();
 
     try {
+      // Clean up worktree FIRST (before merge) to avoid branch deletion issues
+      try {
+        cleanupWorktree(projectRoot, pr.headRefName, pr.issueNumber?.toString() || null);
+      } catch {
+        // Worktree may not exist, continue with merge
+      }
+
       // Merge the PR
       execSync(`gh pr merge ${pr.number} --squash --delete-branch`, {
         cwd: projectRoot,
@@ -249,16 +256,6 @@ export async function mergeCommand(): Promise<void> {
       });
 
       prSpinner.succeed(`Merged PR #${pr.number}: ${pr.title.slice(0, 50)}`);
-
-      // Clean up worktree
-      const cleanSpinner = ora(`  Cleaning up worktree...`).start();
-      try {
-        cleanupWorktree(projectRoot, pr.headRefName, pr.issueNumber?.toString() || null);
-        cleanSpinner.succeed(`  Cleaned up worktree`);
-      } catch {
-        cleanSpinner.warn(`  Could not clean worktree (may not exist)`);
-      }
-
       merged++;
     } catch (error: any) {
       const errorMsg = error.stderr?.toString() || error.message || 'Unknown error';
