@@ -25,11 +25,8 @@ export interface IssueListItem {
 export function createIssue(title: string, body?: string, labels?: string[]): number | null {
   try {
     // Build args array to avoid shell escaping issues
-    const args = ['issue', 'create', '--title', title];
-
-    if (body) {
-      args.push('--body', body);
-    }
+    // Note: gh issue create requires both --title and --body when non-interactive
+    const args = ['issue', 'create', '--title', title, '--body', body || title];
 
     if (labels && labels.length > 0) {
       for (const label of labels) {
@@ -37,8 +34,7 @@ export function createIssue(title: string, body?: string, labels?: string[]): nu
       }
     }
 
-    // Use spawn-like approach with shell: false would be ideal, but execSync doesn't support it well
-    // Instead, use -- to prevent argument parsing issues and proper quoting
+    // Use single quotes with proper escaping for shell safety
     const cmd = `gh ${args.map(arg => `'${arg.replace(/'/g, "'\\''")}'`).join(' ')}`;
 
     const output = execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
