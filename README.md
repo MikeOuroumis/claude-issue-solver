@@ -279,6 +279,8 @@ Claude auto-detects whether you're reviewing your own PR or someone else's:
 cis config bot-token    # Interactive setup with instructions
 ```
 
+> **Note**: For private repos, use a **Classic Token** with `repo` scope. Fine-grained tokens don't work well for collaborator access to repos you don't own.
+
 ## Tips
 
 - PRs are created automatically when Claude makes commits - no need to wait until the end

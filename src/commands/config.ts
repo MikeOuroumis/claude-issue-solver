@@ -174,16 +174,20 @@ ${chalk.bold('You have two options:')}\n`);
 
   // Open GitHub token page
   console.log(chalk.bold('\n🔑 Creating a Personal Access Token\n'));
-  console.log(`I'll open GitHub's token creation page. Create a token with:
+  console.log(`I'll open GitHub's token creation page.
 
-${chalk.bold('Settings:')}
-  • Token name: ${chalk.cyan('claude-issue-solver-bot')}
-  • Expiration: ${chalk.cyan('90 days')} (or your preference)
-  • Repository access: ${chalk.cyan('Only select repositories')} (pick your repos)
+${chalk.bold.yellow('⚠️  Use a Classic Token for private repos you don\'t own!')}
+Fine-grained tokens don't work well for collaborator access.
 
-${chalk.bold('Permissions needed:')}
-  • ${chalk.cyan('Pull requests')}: Read and write
-  • ${chalk.cyan('Contents')}: Read (to see PR diffs)
+${chalk.bold('Option 1: Classic Token')} ${chalk.green('(recommended for private repos)')}
+  • Click "${chalk.cyan('Generate new token (classic)')}"
+  • Note: ${chalk.cyan('claude-issue-solver-bot')}
+  • Expiration: ${chalk.cyan('90 days')}
+  • Scope: ${chalk.cyan('repo')} (full control of private repositories)
+
+${chalk.bold('Option 2: Fine-grained Token')} ${chalk.dim('(only for repos the bot owns)')}
+  • Repository access: ${chalk.cyan('All repositories')}
+  • Permissions: ${chalk.cyan('Pull requests')} (Read/write), ${chalk.cyan('Contents')} (Read)
 `);
 
   const { openBrowser } = await inquirer.prompt([
@@ -196,7 +200,7 @@ ${chalk.bold('Permissions needed:')}
   ]);
 
   if (openBrowser) {
-    const tokenUrl = 'https://github.com/settings/personal-access-tokens/new';
+    const tokenUrl = 'https://github.com/settings/tokens';
     try {
       if (process.platform === 'darwin') {
         execSync(`open "${tokenUrl}"`, { stdio: 'pipe' });
