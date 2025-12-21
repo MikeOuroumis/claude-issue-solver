@@ -47,6 +47,18 @@ function validateToken(token: string): { valid: boolean; login?: string; error?:
   }
 }
 
+function getCurrentUser(): string | null {
+  try {
+    const output = execSync('gh api user --jq .login', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    return output.trim();
+  } catch {
+    return null;
+  }
+}
+
 export async function configCommand(action?: string, value?: string): Promise<void> {
   // Handle clear action
   if (action === '--clear' || action === 'clear') {
@@ -223,6 +235,22 @@ async function promptForToken(): Promise<void> {
   const result = validateToken(token);
 
   if (result.valid) {
+    // Check if token belongs to the same user as current gh auth
+    const currentUser = getCurrentUser();
+    if (currentUser && result.login === currentUser) {
+      console.log(chalk.red(`\n❌ This token belongs to your current account (${currentUser}).`));
+      console.log(chalk.yellow('\n⚠️  To approve your own PRs, you need a DIFFERENT account.'));
+      console.log(chalk.dim('\nGitHub doesn\'t allow approving your own PRs, even with a different token.'));
+      console.log(chalk.dim('The bot must be a separate GitHub account.\n'));
+      console.log('Steps to create a bot account:');
+      console.log(chalk.dim('  1. Sign out of GitHub (or use incognito)'));
+      console.log(chalk.dim(`  2. Create new account (e.g., ${currentUser}-bot)`));
+      console.log(chalk.dim('  3. Add the bot as collaborator to your repos'));
+      console.log(chalk.dim('  4. Create a token from the bot account'));
+      console.log(chalk.dim('  5. Run `cis config bot-token` again\n'));
+      return;
+    }
+
     const config = getConfig();
     config.botToken = token;
     saveConfig(config);
