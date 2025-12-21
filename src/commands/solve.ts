@@ -6,8 +6,9 @@ import { execSync } from 'child_process';
 import { getIssue } from '../utils/github';
 import { getProjectRoot, getProjectName, branchExists, getDefaultBranch } from '../utils/git';
 import { slugify, copyEnvFiles, symlinkNodeModules, openInNewTerminal } from '../utils/helpers';
+import { getBotToken } from './config';
 
-export async function solveCommand(issueNumber: number): Promise<void> {
+export async function solveCommand(issueNumber: number, options: { auto?: boolean } = {}): Promise<void> {
   const spinner = ora(`Fetching issue #${issueNumber}...`).start();
 
   const issue = getIssue(issueNumber);
@@ -91,6 +92,10 @@ Instructions:
   const promptFile = path.join(worktreePath, '.claude-prompt.txt');
   fs.writeFileSync(promptFile, prompt);
 
+  // Get bot token for auto mode
+  const botToken = getBotToken();
+  const autoMode = options.auto || false;
+
   // Create runner script
   const runnerScript = path.join(worktreePath, '.claude-runner.sh');
   const runnerContent = `#!/bin/bash
@@ -102,10 +107,15 @@ echo -ne "\\033]0;Issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"').slic
 echo "🤖 Claude Code - Issue #${issueNumber}: ${issue.title}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "When Claude commits, a PR will be created automatically."
+${autoMode ? 'echo "🔄 AUTO MODE: Will solve → review → fix until approved (max 3 iterations)"' : 'echo "When Claude commits, a PR will be created automatically."'}
 echo "The terminal stays open for follow-up changes."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+
+${botToken ? `# Bot token for reviews
+export BOT_TOKEN="${botToken}"
+export GH_TOKEN="${botToken}"
+` : ''}
 
 # Function to create PR
 create_pr() {
@@ -151,6 +161,7 @@ $COMMIT_LIST
         # Update terminal title with PR info
         PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
         echo -ne "\\033]0;Issue #${issueNumber} → PR #\$PR_NUM\\007"
+        echo "$PR_NUM"
       fi
     else
       # PR exists, just push new commits
@@ -160,8 +171,19 @@ $COMMIT_LIST
       echo "📤 Pushed new commits to PR #$EXISTING_PR"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
+      echo "$EXISTING_PR"
     fi
   fi
+}
+
+# Function to get PR number
+get_pr_number() {
+  gh pr list --head "${branchName}" --json number --jq '.[0].number' 2>/dev/null
+}
+
+# Function to get PR review status
+get_review_status() {
+  ${botToken ? 'GH_TOKEN="${BOT_TOKEN}"' : ''} gh pr view "$1" --json reviewDecision --jq '.reviewDecision' 2>/dev/null
 }
 
 # Watch for new commits in background and create PR
@@ -169,7 +191,7 @@ LAST_COMMIT=""
 while true; do
   CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null)
   if [ "$CURRENT_COMMIT" != "$LAST_COMMIT" ] && [ -n "$LAST_COMMIT" ]; then
-    create_pr
+    create_pr > /dev/null
   fi
   LAST_COMMIT="$CURRENT_COMMIT"
   sleep 2
@@ -186,7 +208,135 @@ rm -f '${promptFile}'
 kill $WATCHER_PID 2>/dev/null
 
 # Final PR check after Claude exits
-create_pr
+create_pr > /dev/null
+
+${autoMode ? `
+# AUTO MODE: Review loop
+MAX_ITERATIONS=3
+ITERATION=0
+
+while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+  ITERATION=$((ITERATION + 1))
+
+  # Wait for PR to be created
+  sleep 2
+  PR_NUM=$(get_pr_number)
+
+  if [ -z "$PR_NUM" ]; then
+    echo ""
+    echo "⚠️  No PR found, skipping auto-review"
+    break
+  fi
+
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "🔍 AUTO-REVIEW: Iteration $ITERATION of $MAX_ITERATIONS"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+
+  # Get PR diff for review
+  PR_DIFF=$(gh pr diff $PR_NUM 2>/dev/null | head -500)
+
+  # Create review prompt
+  REVIEW_PROMPT="You are reviewing PR #$PR_NUM for issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"')}
+
+## Issue Description
+${issue.body.replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/\`/g, '\\`')}
+
+## Your Task
+Review the code changes in this PR. Look for:
+1. Bugs and logic errors
+2. Security vulnerabilities
+3. Missing error handling
+4. Code quality issues
+5. Performance problems
+
+## How to Leave Feedback
+${botToken ? `Use GH_TOKEN=\\$BOT_TOKEN prefix for all gh commands.
+
+If the code looks good:
+\\\`\\\`\\\`bash
+GH_TOKEN=\\$BOT_TOKEN gh pr review $PR_NUM --approve --body \\"LGTM! Code looks good.\\"
+\\\`\\\`\\\`
+
+If changes are needed:
+\\\`\\\`\\\`bash
+GH_TOKEN=\\$BOT_TOKEN gh pr review $PR_NUM --request-changes --body \\"<your feedback>\\"
+\\\`\\\`\\\`
+` : `If the code looks good:
+\\\`\\\`\\\`bash
+gh pr review $PR_NUM --approve --body \\"LGTM! Code looks good.\\"
+\\\`\\\`\\\`
+
+If changes are needed:
+\\\`\\\`\\\`bash
+gh pr review $PR_NUM --request-changes --body \\"<your feedback>\\"
+\\\`\\\`\\\`
+`}
+
+## PR Diff (first 500 lines)
+\\\`\\\`\\\`diff
+$PR_DIFF
+\\\`\\\`\\\`
+
+Review the code and either approve or request changes."
+
+  # Run Claude for review
+  claude --dangerously-skip-permissions "$REVIEW_PROMPT"
+
+  # Check review status
+  sleep 2
+  REVIEW_STATUS=$(get_review_status $PR_NUM)
+
+  echo ""
+  echo "📊 Review status: $REVIEW_STATUS"
+
+  if [ "$REVIEW_STATUS" = "APPROVED" ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "✅ PR APPROVED! Ready to merge."
+    echo "   Run: cis merge"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    break
+  elif [ "$REVIEW_STATUS" = "CHANGES_REQUESTED" ]; then
+    if [ $ITERATION -lt $MAX_ITERATIONS ]; then
+      echo ""
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "🔧 Changes requested. Claude will fix them..."
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo ""
+
+      # Get the review comments
+      REVIEW_COMMENTS=$(${botToken ? 'GH_TOKEN="${BOT_TOKEN}"' : ''} gh pr view $PR_NUM --json reviews --jq '.reviews[-1].body' 2>/dev/null)
+
+      FIX_PROMPT="The code review requested changes. Please fix them:
+
+## Review Feedback
+$REVIEW_COMMENTS
+
+Please address the feedback above, make the necessary changes, and commit them."
+
+      # Run Claude to fix
+      claude --dangerously-skip-permissions "$FIX_PROMPT"
+
+      # Push changes
+      git push origin "${branchName}" 2>/dev/null
+      sleep 2
+    else
+      echo ""
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "⚠️  Max iterations reached. Manual review needed."
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    fi
+  else
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "ℹ️  Review status: $REVIEW_STATUS"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    break
+  fi
+done
+` : ''}
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

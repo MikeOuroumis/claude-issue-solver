@@ -56,16 +56,17 @@ program.hook('preAction', (thisCommand) => {
 // Default command - interactive selection
 program
   .argument('[issue]', 'Issue number to solve')
-  .action(async (issue?: string) => {
+  .option('--auto', 'Auto mode: solve → review → fix until approved (max 3 iterations)')
+  .action(async (issue: string | undefined, options: { auto?: boolean }) => {
     if (issue) {
       const issueNumber = parseInt(issue, 10);
       if (isNaN(issueNumber)) {
         console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
         process.exit(1);
       }
-      await solveCommand(issueNumber);
+      await solveCommand(issueNumber, { auto: options.auto });
     } else {
-      await selectCommand();
+      await selectCommand({ auto: options.auto });
     }
   });
 

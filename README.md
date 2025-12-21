@@ -112,6 +112,10 @@ cis
 # Solve a specific issue directly
 claude-issue 42
 
+# Auto mode: solve → review → fix until approved (max 3 iterations)
+claude-issue --auto          # Interactive selection with auto mode
+claude-issue 42 --auto       # Solve specific issue with auto mode
+
 # List open issues
 claude-issue list
 claude-issue ls
