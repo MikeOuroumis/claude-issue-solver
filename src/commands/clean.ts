@@ -541,13 +541,17 @@ export async function cleanMergedCommand(): Promise<void> {
   );
   statusSpinner.stop();
 
-  // Filter to only merged PRs
+  // Filter to merged PRs and orphaned folders
   const mergedWorktrees = worktreesWithStatus.filter(
     (wt) => wt.prStatus?.state === 'merged'
   );
+  const orphanedWorktrees = worktreesWithStatus.filter(
+    (wt) => !wt.branch
+  );
+  const toClean = [...mergedWorktrees, ...orphanedWorktrees];
 
-  if (mergedWorktrees.length === 0) {
-    console.log(chalk.yellow('\nNo worktrees with merged PRs found.'));
+  if (toClean.length === 0) {
+    console.log(chalk.yellow('\nNo worktrees with merged PRs or orphaned folders found.'));
 
     // Show what's available
     if (worktreesWithStatus.length > 0) {
@@ -560,10 +564,11 @@ export async function cleanMergedCommand(): Promise<void> {
     return;
   }
 
-  console.log(chalk.bold(`\n🧹 Cleaning ${mergedWorktrees.length} worktree(s) with merged PRs:\n`));
+  console.log(chalk.bold(`\n🧹 Cleaning ${toClean.length} worktree(s):\n`));
 
-  for (const wt of mergedWorktrees) {
-    console.log(`  ${chalk.cyan(`#${wt.issueNumber}`)}\t${chalk.green('✓ PR merged')}`);
+  for (const wt of toClean) {
+    const status = getStatusLabel(wt);
+    console.log(`  ${chalk.cyan(`#${wt.issueNumber}`)}\t${status}`);
     if (wt.branch) {
       console.log(chalk.dim(`  \t${wt.branch}`));
     }
@@ -571,7 +576,7 @@ export async function cleanMergedCommand(): Promise<void> {
 
   console.log();
 
-  for (const wt of mergedWorktrees) {
+  for (const wt of toClean) {
     const spinner = ora(`Cleaning issue #${wt.issueNumber}...`).start();
 
     try {
@@ -653,5 +658,5 @@ export async function cleanMergedCommand(): Promise<void> {
   }
 
   console.log();
-  console.log(chalk.green(`✅ Cleaned up ${mergedWorktrees.length} merged worktree(s)!`));
+  console.log(chalk.green(`✅ Cleaned up ${toClean.length} worktree(s)!`));
 }
