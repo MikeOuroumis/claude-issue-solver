@@ -4,7 +4,7 @@ import { listIssues, getIssuesWithOpenPRs } from '../utils/github';
 import { getProjectName } from '../utils/git';
 import { solveCommand } from './solve';
 
-export async function selectCommand(options: { auto?: boolean } = {}): Promise<void> {
+export async function selectCommand(): Promise<void> {
   const projectName = getProjectName();
   console.log(chalk.bold(`\nOpen issues for ${projectName}:\n`));
 
@@ -44,10 +44,10 @@ export async function selectCommand(options: { auto?: boolean } = {}): Promise<v
     return;
   }
 
-  console.log(chalk.cyan(`\nStarting ${issueNumbers.length} issue(s)${options.auto ? ' in auto mode' : ''}...\n`));
+  console.log(chalk.cyan(`\nStarting ${issueNumbers.length} issue(s)...\n`));
 
   for (const issueNumber of issueNumbers) {
-    await solveCommand(issueNumber, { auto: options.auto });
+    await solveCommand(issueNumber);
     console.log();
   }
 }
