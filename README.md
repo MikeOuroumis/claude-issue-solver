@@ -157,6 +157,7 @@ claude-issue --help
 | `claude-issue show <number>` | - | Show full issue details |
 | `claude-issue pr <number>` | - | Create PR for solved issue |
 | `claude-issue review [number]` | - | Review PRs with AI suggestions |
+| `claude-issue config` | - | Manage settings (bot token) |
 | `claude-issue clean [number]` | `rm` | Remove worktree and branch |
 | `claude-issue go [number]` | - | Navigate to worktree |
 | `claude-issue init` | - | Setup wizard for requirements |
@@ -175,6 +176,11 @@ claude-issue --help
 **`clean` command:**
 - `-a, --all` - Clean all issue worktrees (with confirmation)
 - `-m, --merged` - Clean only worktrees with merged PRs (no confirmation)
+
+**`config` command:**
+- `cis config` - Show current configuration
+- `cis config bot-token` - Set up a bot token for reviews
+- `cis config --clear` - Clear all configuration
 
 ## How it works
 
@@ -255,6 +261,23 @@ Branches are named `issue-{number}-{slug}` where the slug is:
 - Max 30 characters
 - Bracket prefixes removed (e.g., `[Bug]` is stripped)
 - Duplicate consecutive words removed (e.g., `fix-fix-bug` → `fix-bug`)
+
+### AI Code Review
+The `review` command lets Claude review PRs and post suggestions:
+
+```bash
+cis review          # Select PRs to review (parallel)
+cis review 42       # Review specific issue's PR
+```
+
+Claude auto-detects whether you're reviewing your own PR or someone else's:
+- **Your own PR**: Posts comments with suggestions (GitHub limitation)
+- **Someone else's PR**: Can approve or request changes
+
+**Bot Token (Optional)**: Set up a bot token to get full review capabilities on your own PRs:
+```bash
+cis config bot-token    # Interactive setup with instructions
+```
 
 ## Tips
 

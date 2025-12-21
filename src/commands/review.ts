@@ -7,6 +7,7 @@ import { execSync } from 'child_process';
 import { getIssue } from '../utils/github';
 import { getProjectRoot, getProjectName, branchExists, getDefaultBranch } from '../utils/git';
 import { slugify, copyEnvFiles, symlinkNodeModules, openInNewTerminal } from '../utils/helpers';
+import { getBotToken } from './config';
 
 interface OpenPR {
   number: number;
@@ -138,7 +139,38 @@ Review the code changes in this PR. Look for:
 6. Performance problems
 
 ## How to Leave Feedback
-Use the gh CLI to post comments with suggestions. For each issue you find:
+
+First, check if you can post formal reviews by running these commands:
+\`\`\`bash
+# Get PR author
+PR_AUTHOR=$(gh pr view ${prNumber} --json author --jq .author.login)
+# Get current user
+CURRENT_USER=$(gh api user --jq .login)
+echo "PR author: $PR_AUTHOR, Current user: $CURRENT_USER"
+\`\`\`
+
+### If PR author ≠ Current user (reviewing someone else's PR):
+You can use formal reviews with approve/request-changes:
+
+\`\`\`bash
+# Post suggestions as review comments
+gh pr review ${prNumber} --comment --body "**File: path/to/file.ts**
+
+Description of the issue...
+
+\\\`\\\`\\\`suggestion
+// Your suggested fix here
+\\\`\\\`\\\`
+"
+
+# Final verdict
+gh pr review ${prNumber} --approve --body "LGTM! Code looks good."
+# OR
+gh pr review ${prNumber} --request-changes --body "Please address the issues above."
+\`\`\`
+
+### If PR author = Current user (reviewing your own PR):
+You can only post comments (GitHub doesn't allow self-review):
 
 \`\`\`bash
 gh pr comment ${prNumber} --body "**File: path/to/file.ts**
@@ -151,18 +183,7 @@ Description of the issue...
 "
 \`\`\`
 
-The \`suggestion\` code block will create a "Commit suggestion" button on GitHub.
-
-For a final review summary:
-\`\`\`bash
-gh pr comment ${prNumber} --body "## Review Summary
-
-- Issue 1: ...
-- Issue 2: ...
-"
-\`\`\`
-
-Note: You cannot approve or request changes on your own PR. Just post suggestions as comments.
+The \`suggestion\` code block creates a "Commit suggestion" button on GitHub.
 
 ## PR Diff
 ${diffContent ? `\n\`\`\`diff\n${diffContent.slice(0, 50000)}\n\`\`\`\n` : 'Run `gh pr diff ' + prNumber + '` to see the changes.'}
@@ -173,10 +194,20 @@ Start by examining the diff and the changed files, then provide your review.`;
   const promptFile = path.join(worktreePath, '.claude-review-prompt.txt');
   fs.writeFileSync(promptFile, prompt);
 
+  // Check for bot token
+  const botToken = getBotToken();
+  const botTokenEnv = botToken ? `export GH_TOKEN="${botToken}"` : '# No bot token configured';
+  const botNote = botToken
+    ? 'Using bot token for reviews (can approve/request changes)'
+    : 'No bot token - using your account (may have limitations on own PRs)';
+
   // Create runner script for review
   const runnerScript = path.join(worktreePath, '.claude-review-runner.sh');
   const runnerContent = `#!/bin/bash
 cd "${worktreePath}"
+
+# Set bot token if configured
+${botTokenEnv}
 
 # Set terminal title
 echo -ne "\\033]0;Review PR #${prNumber}: ${issue.title.replace(/"/g, '\\"').slice(0, 50)}\\007"
@@ -185,6 +216,8 @@ echo "🔍 Claude Code Review - PR #${prNumber}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"')}"
+echo ""
+echo "${botNote}"
 echo ""
 echo "Claude will review the PR and post suggestions."
 echo "You can commit suggestions directly on GitHub."
@@ -397,7 +430,38 @@ Review the code changes in this PR. Look for:
 6. Performance problems
 
 ## How to Leave Feedback
-Use the gh CLI to post comments with suggestions. For each issue you find:
+
+First, check if you can post formal reviews by running these commands:
+\`\`\`bash
+# Get PR author
+PR_AUTHOR=$(gh pr view ${pr.number} --json author --jq .author.login)
+# Get current user
+CURRENT_USER=$(gh api user --jq .login)
+echo "PR author: $PR_AUTHOR, Current user: $CURRENT_USER"
+\`\`\`
+
+### If PR author ≠ Current user (reviewing someone else's PR):
+You can use formal reviews with approve/request-changes:
+
+\`\`\`bash
+# Post suggestions as review comments
+gh pr review ${pr.number} --comment --body "**File: path/to/file.ts**
+
+Description of the issue...
+
+\\\`\\\`\\\`suggestion
+// Your suggested fix here
+\\\`\\\`\\\`
+"
+
+# Final verdict
+gh pr review ${pr.number} --approve --body "LGTM! Code looks good."
+# OR
+gh pr review ${pr.number} --request-changes --body "Please address the issues above."
+\`\`\`
+
+### If PR author = Current user (reviewing your own PR):
+You can only post comments (GitHub doesn't allow self-review):
 
 \`\`\`bash
 gh pr comment ${pr.number} --body "**File: path/to/file.ts**
@@ -410,18 +474,7 @@ Description of the issue...
 "
 \`\`\`
 
-The \`suggestion\` code block will create a "Commit suggestion" button on GitHub.
-
-For a final review summary:
-\`\`\`bash
-gh pr comment ${pr.number} --body "## Review Summary
-
-- Issue 1: ...
-- Issue 2: ...
-"
-\`\`\`
-
-Note: You cannot approve or request changes on your own PR. Just post suggestions as comments.
+The \`suggestion\` code block creates a "Commit suggestion" button on GitHub.
 
 ## PR Diff
 ${diffContent ? `\n\`\`\`diff\n${diffContent.slice(0, 50000)}\n\`\`\`\n` : 'Run `gh pr diff ' + pr.number + '` to see the changes.'}
@@ -432,11 +485,21 @@ Start by examining the diff and the changed files, then provide your review.`;
   const promptFile = path.join(worktreePath, '.claude-review-prompt.txt');
   fs.writeFileSync(promptFile, prompt);
 
+  // Check for bot token
+  const botToken = getBotToken();
+  const botTokenEnv = botToken ? `export GH_TOKEN="${botToken}"` : '# No bot token configured';
+  const botNote = botToken
+    ? 'Using bot token for reviews (can approve/request changes)'
+    : 'No bot token - using your account (may have limitations on own PRs)';
+
   // Create runner script for review
   const runnerScript = path.join(worktreePath, '.claude-review-runner.sh');
   const escapedTitle = pr.title.replace(/"/g, '\\"').slice(0, 50);
   const runnerContent = `#!/bin/bash
 cd "${worktreePath}"
+
+# Set bot token if configured
+${botTokenEnv}
 
 # Set terminal title
 echo -ne "\\033]0;Review PR #${pr.number}: ${escapedTitle}\\007"
@@ -445,6 +508,8 @@ echo "🔍 Claude Code Review - PR #${pr.number}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "${escapedTitle}"
+echo ""
+echo "${botNote}"
 echo ""
 echo "Claude will review the PR and post suggestions."
 echo "You can commit suggestions directly on GitHub."

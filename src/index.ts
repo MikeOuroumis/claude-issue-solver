@@ -14,6 +14,7 @@ import { newCommand } from './commands/new';
 import { initCommand } from './commands/init';
 import { showCommand } from './commands/show';
 import { reviewCommand, selectReviewCommand } from './commands/review';
+import { configCommand } from './commands/config';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageJson = require('../package.json');
@@ -174,6 +175,14 @@ program
     } else {
       await selectReviewCommand();
     }
+  });
+
+// Config command - manage settings
+program
+  .command('config [action] [value]')
+  .description('Manage configuration (bot-token, --clear)')
+  .action(async (action?: string, value?: string) => {
+    await configCommand(action, value);
   });
 
 program.parse();
