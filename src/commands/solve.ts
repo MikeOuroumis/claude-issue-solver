@@ -112,9 +112,9 @@ echo "The terminal stays open for follow-up changes."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-${botToken ? `# Bot token for reviews
+${botToken ? `# Bot token for reviews (only used during review, not PR creation)
 export BOT_TOKEN="${botToken}"
-export GH_TOKEN="${botToken}"
+# DO NOT set GH_TOKEN here - PR should be created as you, not the bot
 ` : ''}
 
 # Function to create PR
@@ -183,7 +183,7 @@ get_pr_number() {
 
 # Function to get PR review status
 get_review_status() {
-  ${botToken ? 'GH_TOKEN="${BOT_TOKEN}"' : ''} gh pr view "$1" --json reviewDecision --jq '.reviewDecision' 2>/dev/null
+  gh pr view "$1" --json reviewDecision --jq '.reviewDecision' 2>/dev/null
 }
 
 # Watch for new commits in background and create PR
@@ -307,7 +307,7 @@ Review the code and either approve or request changes."
       echo ""
 
       # Get the review comments
-      REVIEW_COMMENTS=$(${botToken ? 'GH_TOKEN="${BOT_TOKEN}"' : ''} gh pr view $PR_NUM --json reviews --jq '.reviews[-1].body' 2>/dev/null)
+      REVIEW_COMMENTS=$(gh pr view $PR_NUM --json reviews --jq '.reviews[-1].body' 2>/dev/null)
 
       FIX_PROMPT="The code review requested changes. Please fix them:
 
