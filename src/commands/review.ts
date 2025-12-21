@@ -123,6 +123,10 @@ export async function reviewCommand(issueNumber: number): Promise<void> {
     console.log(chalk.yellow('Could not fetch PR diff, Claude will review the files directly.'));
   }
 
+  // Check for bot token early to include in prompt
+  const botToken = getBotToken();
+  const ghCmd = botToken ? `GH_TOKEN=\${BOT_TOKEN} gh` : 'gh';
+
   // Build the review prompt
   const prompt = `You are reviewing PR #${prNumber} for issue #${issueNumber}: ${issue.title}
 
@@ -139,7 +143,33 @@ Review the code changes in this PR. Look for:
 6. Performance problems
 
 ## How to Leave Feedback
+${botToken ? `
+**IMPORTANT: A bot token is configured. Use this prefix for ALL gh commands:**
+\`\`\`bash
+GH_TOKEN=\${BOT_TOKEN} gh pr review ...
+GH_TOKEN=\${BOT_TOKEN} gh pr comment ...
+\`\`\`
+The BOT_TOKEN environment variable is already set in this terminal.
 
+You can use formal reviews (approve/request-changes):
+
+\`\`\`bash
+# Post suggestions as review comments
+GH_TOKEN=\${BOT_TOKEN} gh pr review ${prNumber} --comment --body "**File: path/to/file.ts**
+
+Description of the issue...
+
+\\\`\\\`\\\`suggestion
+// Your suggested fix here
+\\\`\\\`\\\`
+"
+
+# Final verdict
+GH_TOKEN=\${BOT_TOKEN} gh pr review ${prNumber} --approve --body "LGTM! Code looks good."
+# OR
+GH_TOKEN=\${BOT_TOKEN} gh pr review ${prNumber} --request-changes --body "Please address the issues above."
+\`\`\`
+` : `
 First, check if you can post formal reviews by running these commands:
 \`\`\`bash
 # Get PR author
@@ -182,7 +212,7 @@ Description of the issue...
 \\\`\\\`\\\`
 "
 \`\`\`
-
+`}
 The \`suggestion\` code block creates a "Commit suggestion" button on GitHub.
 
 ## PR Diff
@@ -194,9 +224,8 @@ Start by examining the diff and the changed files, then provide your review.`;
   const promptFile = path.join(worktreePath, '.claude-review-prompt.txt');
   fs.writeFileSync(promptFile, prompt);
 
-  // Check for bot token
-  const botToken = getBotToken();
-  const botTokenEnv = botToken ? `export GH_TOKEN="${botToken}"` : '# No bot token configured';
+  // Bot token already fetched above
+  const botTokenEnv = botToken ? `export BOT_TOKEN="${botToken}"\nexport GH_TOKEN="${botToken}"` : '# No bot token configured';
   const botNote = botToken
     ? 'Using bot token for reviews (can approve/request changes)'
     : 'No bot token - using your account (may have limitations on own PRs)';
@@ -417,6 +446,9 @@ async function launchReviewForPR(
     }
   }
 
+  // Check for bot token
+  const botToken = getBotToken();
+
   // Build the review prompt
   const prompt = `You are reviewing PR #${pr.number}: ${pr.title}
 ${pr.issueNumber ? `\n## Related Issue #${pr.issueNumber}\n${issueBody}\n` : ''}
@@ -430,7 +462,33 @@ Review the code changes in this PR. Look for:
 6. Performance problems
 
 ## How to Leave Feedback
+${botToken ? `
+**IMPORTANT: A bot token is configured. Use this prefix for ALL gh commands:**
+\`\`\`bash
+GH_TOKEN=\${BOT_TOKEN} gh pr review ...
+GH_TOKEN=\${BOT_TOKEN} gh pr comment ...
+\`\`\`
+The BOT_TOKEN environment variable is already set in this terminal.
 
+You can use formal reviews (approve/request-changes):
+
+\`\`\`bash
+# Post suggestions as review comments
+GH_TOKEN=\${BOT_TOKEN} gh pr review ${pr.number} --comment --body "**File: path/to/file.ts**
+
+Description of the issue...
+
+\\\`\\\`\\\`suggestion
+// Your suggested fix here
+\\\`\\\`\\\`
+"
+
+# Final verdict
+GH_TOKEN=\${BOT_TOKEN} gh pr review ${pr.number} --approve --body "LGTM! Code looks good."
+# OR
+GH_TOKEN=\${BOT_TOKEN} gh pr review ${pr.number} --request-changes --body "Please address the issues above."
+\`\`\`
+` : `
 First, check if you can post formal reviews by running these commands:
 \`\`\`bash
 # Get PR author
@@ -473,7 +531,7 @@ Description of the issue...
 \\\`\\\`\\\`
 "
 \`\`\`
-
+`}
 The \`suggestion\` code block creates a "Commit suggestion" button on GitHub.
 
 ## PR Diff
@@ -485,9 +543,7 @@ Start by examining the diff and the changed files, then provide your review.`;
   const promptFile = path.join(worktreePath, '.claude-review-prompt.txt');
   fs.writeFileSync(promptFile, prompt);
 
-  // Check for bot token
-  const botToken = getBotToken();
-  const botTokenEnv = botToken ? `export GH_TOKEN="${botToken}"` : '# No bot token configured';
+  const botTokenEnv = botToken ? `export BOT_TOKEN="${botToken}"\nexport GH_TOKEN="${botToken}"` : '# No bot token configured';
   const botNote = botToken
     ? 'Using bot token for reviews (can approve/request changes)'
     : 'No bot token - using your account (may have limitations on own PRs)';
