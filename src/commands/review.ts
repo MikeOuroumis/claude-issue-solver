@@ -14,6 +14,7 @@ interface OpenPR {
   title: string;
   headRefName: string;
   issueNumber: number | null;
+  reviewDecision: string | null;
 }
 
 export async function reviewCommand(issueNumber: number): Promise<void> {
@@ -302,14 +303,14 @@ function getRepoName(projectRoot: string): string {
 function getOpenPRs(projectRoot: string): OpenPR[] {
   try {
     const output = execSync(
-      'gh pr list --state open --json number,title,headRefName --limit 50',
+      'gh pr list --state open --json number,title,headRefName,reviewDecision --limit 50',
       {
         cwd: projectRoot,
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
       }
     );
-    const prs = JSON.parse(output) as { number: number; title: string; headRefName: string }[];
+    const prs = JSON.parse(output) as { number: number; title: string; headRefName: string; reviewDecision: string | null }[];
 
     return prs.map((pr) => {
       // Try to extract issue number from branch name (issue-42-slug)
@@ -317,6 +318,7 @@ function getOpenPRs(projectRoot: string): OpenPR[] {
       return {
         ...pr,
         issueNumber: match ? parseInt(match[1], 10) : null,
+        reviewDecision: pr.reviewDecision,
       };
     });
   } catch {
@@ -342,8 +344,22 @@ export async function selectReviewCommand(): Promise<void> {
   // Build choices for checkbox prompt
   const choices = prs.map((pr) => {
     const issueTag = pr.issueNumber ? chalk.dim(` (issue #${pr.issueNumber})`) : '';
+    let statusTag = '';
+    switch (pr.reviewDecision) {
+      case 'APPROVED':
+        statusTag = chalk.green(' ✓ Approved');
+        break;
+      case 'CHANGES_REQUESTED':
+        statusTag = chalk.red(' ✗ Changes requested');
+        break;
+      case 'REVIEW_REQUIRED':
+        statusTag = chalk.yellow(' ○ Review required');
+        break;
+      default:
+        statusTag = chalk.dim(' ○ No reviews');
+    }
     return {
-      name: `#${pr.number}\t${pr.title}${issueTag}`,
+      name: `#${pr.number}\t${pr.title}${issueTag}${statusTag}`,
       value: pr,
       checked: false,
     };
