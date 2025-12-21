@@ -16,11 +16,12 @@ interface OpenPR {
   mergeable: string;
 }
 
-function closeWindowsWithPath(folderPath: string, issueNumber: string): void {
+function closeWindowsWithPath(folderPath: string, issueNumber: string, prNumber?: string): void {
   if (os.platform() !== 'darwin') return;
 
   const folderName = path.basename(folderPath);
   const issuePattern = `Issue #${issueNumber}`;
+  const reviewPattern = prNumber ? `Review PR #${prNumber}` : `issue-${issueNumber}-`;
 
   // Try to close iTerm2 tabs/windows
   try {
@@ -30,7 +31,7 @@ function closeWindowsWithPath(folderPath: string, issueNumber: string): void {
           repeat with t in tabs of w
             repeat with s in sessions of t
               set sessionName to name of s
-              if sessionName contains "${folderName}" or sessionName contains "${issuePattern}" then
+              if sessionName contains "${folderName}" or sessionName contains "${issuePattern}" or sessionName contains "${reviewPattern}" then
                 close s
               end if
             end repeat
@@ -48,7 +49,7 @@ function closeWindowsWithPath(folderPath: string, issueNumber: string): void {
       tell application "Terminal"
         repeat with w in windows
           set windowName to name of w
-          if windowName contains "${folderName}" or windowName contains "${issuePattern}" then
+          if windowName contains "${folderName}" or windowName contains "${issuePattern}" or windowName contains "${reviewPattern}" then
             close w
           end if
         end repeat
@@ -107,15 +108,15 @@ function getOpenPRs(projectRoot: string): OpenPR[] {
   }
 }
 
-function cleanupWorktree(projectRoot: string, branchName: string, issueNumber: string | null): void {
+function cleanupWorktree(projectRoot: string, branchName: string, issueNumber: string | null, prNumber?: string): void {
   const projectName = getProjectName();
   const parentDir = path.dirname(projectRoot);
   const worktreePath = path.join(parentDir, `${projectName}-${branchName}`);
 
-  // Close windows
+  // Close windows (including review terminals)
   if (issueNumber) {
     try {
-      closeWindowsWithPath(worktreePath, issueNumber);
+      closeWindowsWithPath(worktreePath, issueNumber, prNumber);
     } catch {
       // Ignore
     }
@@ -243,7 +244,7 @@ export async function mergeCommand(): Promise<void> {
     try {
       // Clean up worktree FIRST (before merge) to avoid branch deletion issues
       try {
-        cleanupWorktree(projectRoot, pr.headRefName, pr.issueNumber?.toString() || null);
+        cleanupWorktree(projectRoot, pr.headRefName, pr.issueNumber?.toString() || null, pr.number.toString());
       } catch {
         // Worktree may not exist, continue with merge
       }

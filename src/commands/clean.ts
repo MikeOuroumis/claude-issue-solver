@@ -9,13 +9,14 @@ import { getIssueStatus, getPRForBranch, getIssueStatusAsync, getPRForBranchAsyn
 import { getProjectRoot, getProjectName, exec } from '../utils/git';
 import { slugify } from '../utils/helpers';
 
-function closeWindowsWithPath(folderPath: string, issueNumber: string): void {
+function closeWindowsWithPath(folderPath: string, issueNumber: string, prNumber?: string): void {
   if (os.platform() !== 'darwin') return;
 
   const folderName = path.basename(folderPath);
   const issuePattern = `Issue #${issueNumber}`;
+  const reviewPattern = prNumber ? `Review PR #${prNumber}` : `issue-${issueNumber}-`;
 
-  // Try to close iTerm2 tabs/windows with this path or issue number
+  // Try to close iTerm2 tabs/windows with this path, issue number, or review PR
   try {
     execSync(`osascript -e '
       tell application "iTerm"
@@ -23,7 +24,7 @@ function closeWindowsWithPath(folderPath: string, issueNumber: string): void {
           repeat with t in tabs of w
             repeat with s in sessions of t
               set sessionName to name of s
-              if sessionName contains "${folderName}" or sessionName contains "${issuePattern}" then
+              if sessionName contains "${folderName}" or sessionName contains "${issuePattern}" or sessionName contains "${reviewPattern}" then
                 close s
               end if
             end repeat
@@ -35,13 +36,13 @@ function closeWindowsWithPath(folderPath: string, issueNumber: string): void {
     // iTerm not running or no matching sessions
   }
 
-  // Try to close Terminal.app windows with this path or issue number
+  // Try to close Terminal.app windows with this path, issue number, or review PR
   try {
     execSync(`osascript -e '
       tell application "Terminal"
         repeat with w in windows
           set windowName to name of w
-          if windowName contains "${folderName}" or windowName contains "${issuePattern}" then
+          if windowName contains "${folderName}" or windowName contains "${issuePattern}" or windowName contains "${reviewPattern}" then
             close w
           end if
         end repeat
