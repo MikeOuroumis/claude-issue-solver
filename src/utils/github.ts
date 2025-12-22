@@ -74,9 +74,10 @@ export function getIssue(issueNumber: number): Issue | null {
 
 export function listIssues(limit = 50): IssueListItem[] {
   try {
-    const limitArg = limit > 0 ? `--limit ${limit}` : '';
+    // When limit is 0, fetch all (use a high number since gh requires --limit)
+    const actualLimit = limit > 0 ? limit : 1000;
     const output = execSync(
-      `gh issue list --state open ${limitArg} --json number,title,body,labels`,
+      `gh issue list --state open --limit ${actualLimit} --json number,title,body,labels`,
       { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
     return JSON.parse(output);
