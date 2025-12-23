@@ -17,7 +17,7 @@ interface OpenPR {
   reviewDecision: string | null;
 }
 
-export async function reviewCommand(issueNumber: number): Promise<void> {
+export async function reviewCommand(issueNumber: number, options: { merge?: boolean } = {}): Promise<void> {
   const spinner = ora(`Fetching issue #${issueNumber}...`).start();
 
   const issue = getIssue(issueNumber);
@@ -251,6 +251,7 @@ echo "${botNote}"
 echo ""
 echo "Claude will review the PR and post suggestions."
 echo "You can commit suggestions directly on GitHub."
+${options.merge ? 'echo "\\n🔄 Auto-merge enabled: will merge if approved."' : ''}
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -271,30 +272,22 @@ REVIEW_STATUS=$(gh pr view ${prNumber} --json reviewDecision --jq '.reviewDecisi
 if [ "$REVIEW_STATUS" = "APPROVED" ]; then
   echo "✅ PR #${prNumber} is approved!"
   echo ""
-  read -p "Would you like to merge and clean up? [y/N] " -n 1 -r
-  echo ""
-  if [[ \\$REPLY =~ ^[Yy]$ ]]; then
+${options.merge ? `  echo "📤 Auto-merging PR #${prNumber}..."
+  if gh pr merge ${prNumber} --squash --delete-branch; then
     echo ""
-    echo "📤 Merging PR #${prNumber}..."
-    if gh pr merge ${prNumber} --squash --delete-branch; then
-      echo ""
-      echo "✅ PR merged successfully!"
-      echo ""
-      echo "Cleaning up worktree..."
-      cd "${projectRoot}"
-      git worktree remove "${worktreePath}" --force 2>/dev/null || rm -rf "${worktreePath}"
-      git worktree prune 2>/dev/null
-      git branch -D "${branchName}" 2>/dev/null
-      echo "✅ Cleanup complete!"
-    else
-      echo ""
-      echo "⚠️  Merge failed. You can try manually: gh pr merge ${prNumber} --squash"
-    fi
+    echo "✅ PR merged successfully!"
+    echo ""
+    echo "Cleaning up worktree..."
+    cd "${projectRoot}"
+    git worktree remove "${worktreePath}" --force 2>/dev/null || rm -rf "${worktreePath}"
+    git worktree prune 2>/dev/null
+    git branch -D "${branchName}" 2>/dev/null
+    echo "✅ Cleanup complete!"
   else
     echo ""
-    echo "View PR: gh pr view ${prNumber} --web"
-    echo "To merge later: cis merge"
-  fi
+    echo "⚠️  Merge failed. You can try manually: gh pr merge ${prNumber} --squash"
+  fi` : `  echo "View PR: gh pr view ${prNumber} --web"
+  echo "To merge: cis merge"`}
 else
   echo "View PR: gh pr view ${prNumber} --web"
 fi
@@ -359,7 +352,7 @@ function getOpenPRs(projectRoot: string): OpenPR[] {
   }
 }
 
-export async function selectReviewCommand(): Promise<void> {
+export async function selectReviewCommand(options: { merge?: boolean } = {}): Promise<void> {
   const projectRoot = getProjectRoot();
   const projectName = getProjectName();
 
@@ -418,7 +411,7 @@ export async function selectReviewCommand(): Promise<void> {
 
   // Launch reviews in parallel
   for (const pr of selected as OpenPR[]) {
-    await launchReviewForPR(pr, projectRoot, projectName);
+    await launchReviewForPR(pr, projectRoot, projectName, options);
   }
 
   console.log();
@@ -429,7 +422,8 @@ export async function selectReviewCommand(): Promise<void> {
 async function launchReviewForPR(
   pr: OpenPR,
   projectRoot: string,
-  projectName: string
+  projectName: string,
+  options: { merge?: boolean } = {}
 ): Promise<void> {
   const baseBranch = getDefaultBranch();
   const branchName = pr.headRefName;
@@ -618,6 +612,7 @@ echo "${botNote}"
 echo ""
 echo "Claude will review the PR and post suggestions."
 echo "You can commit suggestions directly on GitHub."
+${options.merge ? 'echo "\\n🔄 Auto-merge enabled: will merge if approved."' : ''}
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -638,30 +633,22 @@ REVIEW_STATUS=$(gh pr view ${pr.number} --json reviewDecision --jq '.reviewDecis
 if [ "$REVIEW_STATUS" = "APPROVED" ]; then
   echo "✅ PR #${pr.number} is approved!"
   echo ""
-  read -p "Would you like to merge and clean up? [y/N] " -n 1 -r
-  echo ""
-  if [[ \\$REPLY =~ ^[Yy]$ ]]; then
+${options.merge ? `  echo "📤 Auto-merging PR #${pr.number}..."
+  if gh pr merge ${pr.number} --squash --delete-branch; then
     echo ""
-    echo "📤 Merging PR #${pr.number}..."
-    if gh pr merge ${pr.number} --squash --delete-branch; then
-      echo ""
-      echo "✅ PR merged successfully!"
-      echo ""
-      echo "Cleaning up worktree..."
-      cd "${projectRoot}"
-      git worktree remove "${worktreePath}" --force 2>/dev/null || rm -rf "${worktreePath}"
-      git worktree prune 2>/dev/null
-      git branch -D "${branchName}" 2>/dev/null
-      echo "✅ Cleanup complete!"
-    else
-      echo ""
-      echo "⚠️  Merge failed. You can try manually: gh pr merge ${pr.number} --squash"
-    fi
+    echo "✅ PR merged successfully!"
+    echo ""
+    echo "Cleaning up worktree..."
+    cd "${projectRoot}"
+    git worktree remove "${worktreePath}" --force 2>/dev/null || rm -rf "${worktreePath}"
+    git worktree prune 2>/dev/null
+    git branch -D "${branchName}" 2>/dev/null
+    echo "✅ Cleanup complete!"
   else
     echo ""
-    echo "View PR: gh pr view ${pr.number} --web"
-    echo "To merge later: cis merge"
-  fi
+    echo "⚠️  Merge failed. You can try manually: gh pr merge ${pr.number} --squash"
+  fi` : `  echo "View PR: gh pr view ${pr.number} --web"
+  echo "To merge: cis merge"`}
 else
   echo "View PR: gh pr view ${pr.number} --web"
 fi
