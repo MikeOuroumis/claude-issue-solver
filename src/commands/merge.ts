@@ -28,12 +28,20 @@ function closeWindowsWithPath(folderPath: string, issueNumber: string, prNumber?
     execSync(`osascript -e '
       tell application "iTerm"
         repeat with w in windows
+          try
+            set windowName to name of w
+            if windowName contains "${folderName}" or windowName contains "${issuePattern}" or windowName contains "${reviewPattern}" then
+              close w
+            end if
+          end try
           repeat with t in tabs of w
             repeat with s in sessions of t
-              set sessionName to name of s
-              if sessionName contains "${folderName}" or sessionName contains "${issuePattern}" or sessionName contains "${reviewPattern}" then
-                close s
-              end if
+              try
+                set sessionName to name of s
+                if sessionName contains "${folderName}" or sessionName contains "${issuePattern}" or sessionName contains "${reviewPattern}" then
+                  close s
+                end if
+              end try
             end repeat
           end repeat
         end repeat
