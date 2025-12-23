@@ -264,7 +264,40 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Review session ended."
 echo ""
-echo "View PR: gh pr view ${prNumber} --web"
+
+# Check if PR was approved
+REVIEW_STATUS=$(gh pr view ${prNumber} --json reviewDecision --jq '.reviewDecision' 2>/dev/null)
+
+if [ "$REVIEW_STATUS" = "APPROVED" ]; then
+  echo "✅ PR #${prNumber} is approved!"
+  echo ""
+  read -p "Would you like to merge and clean up? [y/N] " -n 1 -r
+  echo ""
+  if [[ \\$REPLY =~ ^[Yy]$ ]]; then
+    echo ""
+    echo "📤 Merging PR #${prNumber}..."
+    if gh pr merge ${prNumber} --squash --delete-branch; then
+      echo ""
+      echo "✅ PR merged successfully!"
+      echo ""
+      echo "Cleaning up worktree..."
+      cd "${projectRoot}"
+      git worktree remove "${worktreePath}" --force 2>/dev/null || rm -rf "${worktreePath}"
+      git worktree prune 2>/dev/null
+      git branch -D "${branchName}" 2>/dev/null
+      echo "✅ Cleanup complete!"
+    else
+      echo ""
+      echo "⚠️  Merge failed. You can try manually: gh pr merge ${prNumber} --squash"
+    fi
+  else
+    echo ""
+    echo "View PR: gh pr view ${prNumber} --web"
+    echo "To merge later: cis merge"
+  fi
+else
+  echo "View PR: gh pr view ${prNumber} --web"
+fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -598,7 +631,40 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Review session ended."
 echo ""
-echo "View PR: gh pr view ${pr.number} --web"
+
+# Check if PR was approved
+REVIEW_STATUS=$(gh pr view ${pr.number} --json reviewDecision --jq '.reviewDecision' 2>/dev/null)
+
+if [ "$REVIEW_STATUS" = "APPROVED" ]; then
+  echo "✅ PR #${pr.number} is approved!"
+  echo ""
+  read -p "Would you like to merge and clean up? [y/N] " -n 1 -r
+  echo ""
+  if [[ \\$REPLY =~ ^[Yy]$ ]]; then
+    echo ""
+    echo "📤 Merging PR #${pr.number}..."
+    if gh pr merge ${pr.number} --squash --delete-branch; then
+      echo ""
+      echo "✅ PR merged successfully!"
+      echo ""
+      echo "Cleaning up worktree..."
+      cd "${projectRoot}"
+      git worktree remove "${worktreePath}" --force 2>/dev/null || rm -rf "${worktreePath}"
+      git worktree prune 2>/dev/null
+      git branch -D "${branchName}" 2>/dev/null
+      echo "✅ Cleanup complete!"
+    else
+      echo ""
+      echo "⚠️  Merge failed. You can try manually: gh pr merge ${pr.number} --squash"
+    fi
+  else
+    echo ""
+    echo "View PR: gh pr view ${pr.number} --web"
+    echo "To merge later: cis merge"
+  fi
+else
+  echo "View PR: gh pr view ${pr.number} --web"
+fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
