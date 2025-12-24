@@ -3,10 +3,11 @@ import ora from 'ora';
 import inquirer from 'inquirer';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { execSync } from 'child_process';
 import { getIssue } from '../utils/github';
-import { getProjectRoot, getProjectName, branchExists, getDefaultBranch } from '../utils/git';
-import { slugify, copyEnvFiles, symlinkNodeModules, openInNewTerminal } from '../utils/helpers';
+import { getProjectRoot, getProjectName } from '../utils/git';
+import { openInNewTerminal } from '../utils/helpers';
 import { getBotToken } from './config';
 
 interface OpenPR {
@@ -29,23 +30,25 @@ export async function reviewCommand(issueNumber: number, options: { merge?: bool
   spinner.succeed(`Found issue #${issueNumber}`);
 
   const projectRoot = getProjectRoot();
-  const projectName = getProjectName();
-  const baseBranch = getDefaultBranch();
-  const branchSlug = slugify(issue.title);
-  const branchName = `issue-${issueNumber}-${branchSlug}`;
-  const worktreePath = path.join(path.dirname(projectRoot), `${projectName}-${branchName}`);
 
-  // Check if there's a PR for this issue
+  // Check if there's a PR for this issue - search by issue number in all PRs
   const prCheckSpinner = ora('Checking for PR...').start();
   let prNumber: string | null = null;
+  let branchName: string | null = null;
   try {
-    const prOutput = execSync(`gh pr list --head "${branchName}" --json number --jq '.[0].number'`, {
-      cwd: projectRoot,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
+    // Search for PRs that mention the issue number in their branch name
+    const prOutput = execSync(
+      `gh pr list --state open --json number,headRefName --jq '.[] | select(.headRefName | test("issue-${issueNumber}-")) | "\\(.number) \\(.headRefName)"'`,
+      {
+        cwd: projectRoot,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }
+    ).trim();
     if (prOutput) {
-      prNumber = prOutput;
+      const [num, branch] = prOutput.split(' ');
+      prNumber = num;
+      branchName = branch;
       prCheckSpinner.succeed(`Found PR #${prNumber}`);
     } else {
       prCheckSpinner.fail('No PR found for this issue');
@@ -62,54 +65,6 @@ export async function reviewCommand(issueNumber: number, options: { merge?: bool
   console.log(chalk.bold(`📌 Reviewing: ${issue.title}`));
   console.log(chalk.dim(`🔗 PR: https://github.com/${getRepoName(projectRoot)}/pull/${prNumber}`));
   console.log();
-
-  // Fetch latest
-  const fetchSpinner = ora(`Fetching latest changes...`).start();
-  try {
-    execSync(`git fetch origin ${branchName} --quiet`, { cwd: projectRoot, stdio: 'pipe' });
-    fetchSpinner.succeed('Fetched latest changes');
-  } catch {
-    fetchSpinner.warn('Could not fetch branch');
-  }
-
-  // Check if worktree already exists
-  if (fs.existsSync(worktreePath)) {
-    console.log(chalk.yellow(`\n🌿 Using existing worktree at: ${worktreePath}`));
-    // Pull latest changes
-    try {
-      execSync('git pull --quiet', { cwd: worktreePath, stdio: 'pipe' });
-    } catch {
-      // Ignore pull errors
-    }
-  } else {
-    const worktreeSpinner = ora(`Creating worktree for review...`).start();
-
-    try {
-      if (branchExists(branchName)) {
-        execSync(`git worktree add "${worktreePath}" "${branchName}"`, {
-          cwd: projectRoot,
-          stdio: 'pipe',
-        });
-      } else {
-        // Branch should exist if PR exists, but handle edge case
-        execSync(`git worktree add "${worktreePath}" "origin/${branchName}"`, {
-          cwd: projectRoot,
-          stdio: 'pipe',
-        });
-      }
-      worktreeSpinner.succeed(`Created worktree at: ${worktreePath}`);
-    } catch (error) {
-      worktreeSpinner.fail('Failed to create worktree');
-      console.error(error);
-      process.exit(1);
-    }
-
-    // Copy env files and symlink node_modules
-    const setupSpinner = ora('Setting up worktree...').start();
-    copyEnvFiles(projectRoot, worktreePath);
-    symlinkNodeModules(projectRoot, worktreePath);
-    setupSpinner.succeed('Worktree setup complete');
-  }
 
   // Get the diff for context
   let diffContent = '';
@@ -221,8 +176,9 @@ ${diffContent ? `\n\`\`\`diff\n${diffContent.slice(0, 50000)}\n\`\`\`\n` : 'Run 
 
 Start by examining the diff and the changed files, then provide your review.`;
 
-  // Write prompt to a file
-  const promptFile = path.join(worktreePath, '.claude-review-prompt.txt');
+  // Write prompt and runner script to temp directory
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cis-review-'));
+  const promptFile = path.join(tempDir, '.claude-review-prompt.txt');
   fs.writeFileSync(promptFile, prompt);
 
   // Bot token already fetched above
@@ -232,9 +188,9 @@ Start by examining the diff and the changed files, then provide your review.`;
     : 'No bot token - using your account (may have limitations on own PRs)';
 
   // Create runner script for review
-  const runnerScript = path.join(worktreePath, '.claude-review-runner.sh');
+  const runnerScript = path.join(tempDir, '.claude-review-runner.sh');
   const runnerContent = `#!/bin/bash
-cd "${worktreePath}"
+cd "${projectRoot}"
 
 # Set bot token if configured
 ${botTokenEnv}
@@ -258,8 +214,8 @@ echo ""
 # Run Claude interactively
 claude --dangerously-skip-permissions "$(cat '${promptFile}')"
 
-# Clean up prompt file
-rm -f '${promptFile}'
+# Clean up temp files
+rm -rf '${tempDir}'
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -276,13 +232,6 @@ ${options.merge ? `  echo "📤 Auto-merging PR #${prNumber}..."
   if gh pr merge ${prNumber} --squash --delete-branch; then
     echo ""
     echo "✅ PR merged successfully!"
-    echo ""
-    echo "Cleaning up worktree..."
-    cd "${projectRoot}"
-    git worktree remove "${worktreePath}" --force 2>/dev/null || rm -rf "${worktreePath}"
-    git worktree prune 2>/dev/null
-    git branch -D "${branchName}" 2>/dev/null
-    echo "✅ Cleanup complete!"
   else
     echo ""
     echo "⚠️  Merge failed. You can try manually: gh pr merge ${prNumber} --squash"
@@ -310,7 +259,6 @@ exec bash
   console.log(chalk.dim(`   Claude is reviewing in a new terminal window.`));
   console.log();
   console.log(chalk.dim(`   View PR: gh pr view ${prNumber} --web`));
-  console.log(chalk.dim(`   To clean up later: claude-issue clean ${issueNumber}`));
 }
 
 function getRepoName(projectRoot: string): string {
@@ -422,51 +370,9 @@ export async function selectReviewCommand(options: { merge?: boolean } = {}): Pr
 async function launchReviewForPR(
   pr: OpenPR,
   projectRoot: string,
-  projectName: string,
+  _projectName: string,
   options: { merge?: boolean } = {}
 ): Promise<void> {
-  const baseBranch = getDefaultBranch();
-  const branchName = pr.headRefName;
-  const worktreePath = path.join(path.dirname(projectRoot), `${projectName}-${branchName}`);
-
-  // Fetch latest
-  try {
-    execSync(`git fetch origin ${branchName} --quiet`, { cwd: projectRoot, stdio: 'pipe' });
-  } catch {
-    // Ignore fetch errors
-  }
-
-  // Check if worktree already exists
-  if (!fs.existsSync(worktreePath)) {
-    try {
-      if (branchExists(branchName)) {
-        execSync(`git worktree add "${worktreePath}" "${branchName}"`, {
-          cwd: projectRoot,
-          stdio: 'pipe',
-        });
-      } else {
-        execSync(`git worktree add "${worktreePath}" "origin/${branchName}"`, {
-          cwd: projectRoot,
-          stdio: 'pipe',
-        });
-      }
-
-      // Copy env files and symlink node_modules
-      copyEnvFiles(projectRoot, worktreePath);
-      symlinkNodeModules(projectRoot, worktreePath);
-    } catch (error) {
-      console.log(chalk.yellow(`⚠️  Could not create worktree for PR #${pr.number}`));
-      return;
-    }
-  } else {
-    // Pull latest changes
-    try {
-      execSync('git pull --quiet', { cwd: worktreePath, stdio: 'pipe' });
-    } catch {
-      // Ignore pull errors
-    }
-  }
-
   // Get the diff for context
   let diffContent = '';
   try {
@@ -582,8 +488,9 @@ ${diffContent ? `\n\`\`\`diff\n${diffContent.slice(0, 50000)}\n\`\`\`\n` : 'Run 
 
 Start by examining the diff and the changed files, then provide your review.`;
 
-  // Write prompt to a file
-  const promptFile = path.join(worktreePath, '.claude-review-prompt.txt');
+  // Write prompt and runner script to temp directory
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cis-review-'));
+  const promptFile = path.join(tempDir, '.claude-review-prompt.txt');
   fs.writeFileSync(promptFile, prompt);
 
   const botTokenEnv = botToken ? `export BOT_TOKEN="${botToken}"\nexport GH_TOKEN="${botToken}"` : '# No bot token configured';
@@ -592,10 +499,10 @@ Start by examining the diff and the changed files, then provide your review.`;
     : 'No bot token - using your account (may have limitations on own PRs)';
 
   // Create runner script for review
-  const runnerScript = path.join(worktreePath, '.claude-review-runner.sh');
+  const runnerScript = path.join(tempDir, '.claude-review-runner.sh');
   const escapedTitle = pr.title.replace(/"/g, '\\"').slice(0, 50);
   const runnerContent = `#!/bin/bash
-cd "${worktreePath}"
+cd "${projectRoot}"
 
 # Set bot token if configured
 ${botTokenEnv}
@@ -619,8 +526,8 @@ echo ""
 # Run Claude interactively
 claude --dangerously-skip-permissions "$(cat '${promptFile}')"
 
-# Clean up prompt file
-rm -f '${promptFile}'
+# Clean up temp files
+rm -rf '${tempDir}'
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -637,13 +544,6 @@ ${options.merge ? `  echo "📤 Auto-merging PR #${pr.number}..."
   if gh pr merge ${pr.number} --squash --delete-branch; then
     echo ""
     echo "✅ PR merged successfully!"
-    echo ""
-    echo "Cleaning up worktree..."
-    cd "${projectRoot}"
-    git worktree remove "${worktreePath}" --force 2>/dev/null || rm -rf "${worktreePath}"
-    git worktree prune 2>/dev/null
-    git branch -D "${branchName}" 2>/dev/null
-    echo "✅ Cleanup complete!"
   else
     echo ""
     echo "⚠️  Merge failed. You can try manually: gh pr merge ${pr.number} --squash"
