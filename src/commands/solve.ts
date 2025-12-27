@@ -86,7 +86,7 @@ Instructions:
 2. Implement the necessary changes
 3. Make sure to run tests if applicable
 4. When done, commit your changes with a descriptive message that references the issue
-5. A PR will be created automatically when you commit - no need to create one manually`;
+5. After committing, create a PR that closes this issue (use "Closes #${issueNumber}" in the PR body)`;
 
   // Write prompt to a file to avoid shell escaping issues with backticks, <>, etc.
   const promptFile = path.join(worktreePath, '.claude-prompt.txt');
