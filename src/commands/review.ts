@@ -99,34 +99,36 @@ Review the code changes in this PR. Look for:
 6. Performance problems
 
 ## How to Leave Feedback
-${botToken ? `
-**IMPORTANT: A bot token is configured. Use this prefix for ALL gh commands:**
+
+**IMPORTANT: Submit only ONE review to avoid duplicate reviews on GitHub.**
+
+${botToken ? `A bot token is configured. Use this prefix for ALL gh commands:
 \`\`\`bash
 GH_TOKEN=\${BOT_TOKEN} gh pr review ...
-GH_TOKEN=\${BOT_TOKEN} gh pr comment ...
 \`\`\`
 The BOT_TOKEN environment variable is already set in this terminal.
 
-You can use formal reviews (approve/request-changes):
+Collect all your feedback and submit it in a SINGLE review command:
 
 \`\`\`bash
-# Post suggestions as review comments
-GH_TOKEN=\${BOT_TOKEN} gh pr review ${prNumber} --comment --body "**File: path/to/file.ts**
+# If the code looks good:
+GH_TOKEN=\${BOT_TOKEN} gh pr review ${prNumber} --approve --body "LGTM! Code looks good."
 
+# If there are issues to address:
+GH_TOKEN=\${BOT_TOKEN} gh pr review ${prNumber} --request-changes --body "## Review Feedback
+
+**File: path/to/file.ts**
 Description of the issue...
 
 \\\`\\\`\\\`suggestion
 // Your suggested fix here
 \\\`\\\`\\\`
-"
 
-# Final verdict
-GH_TOKEN=\${BOT_TOKEN} gh pr review ${prNumber} --approve --body "LGTM! Code looks good."
-# OR
-GH_TOKEN=\${BOT_TOKEN} gh pr review ${prNumber} --request-changes --body "Please address the issues above."
+**File: another/file.ts**
+Another issue...
+"
 \`\`\`
-` : `
-First, check if you can post formal reviews by running these commands:
+` : `First, check if you can post formal reviews by running these commands:
 \`\`\`bash
 # Get PR author
 PR_AUTHOR=$(gh pr view ${prNumber} --json author --jq .author.login)
@@ -136,31 +138,34 @@ echo "PR author: $PR_AUTHOR, Current user: $CURRENT_USER"
 \`\`\`
 
 ### If PR author ≠ Current user (reviewing someone else's PR):
-You can use formal reviews with approve/request-changes:
+Collect all your feedback and submit it in a SINGLE review command:
 
 \`\`\`bash
-# Post suggestions as review comments
-gh pr review ${prNumber} --comment --body "**File: path/to/file.ts**
+# If the code looks good:
+gh pr review ${prNumber} --approve --body "LGTM! Code looks good."
 
+# If there are issues to address:
+gh pr review ${prNumber} --request-changes --body "## Review Feedback
+
+**File: path/to/file.ts**
 Description of the issue...
 
 \\\`\\\`\\\`suggestion
 // Your suggested fix here
 \\\`\\\`\\\`
-"
 
-# Final verdict
-gh pr review ${prNumber} --approve --body "LGTM! Code looks good."
-# OR
-gh pr review ${prNumber} --request-changes --body "Please address the issues above."
+**File: another/file.ts**
+Another issue...
+"
 \`\`\`
 
 ### If PR author = Current user (reviewing your own PR):
 You can only post comments (GitHub doesn't allow self-review):
 
 \`\`\`bash
-gh pr comment ${prNumber} --body "**File: path/to/file.ts**
+gh pr comment ${prNumber} --body "## Self-Review Notes
 
+**File: path/to/file.ts**
 Description of the issue...
 
 \\\`\\\`\\\`suggestion
@@ -411,34 +416,36 @@ Review the code changes in this PR. Look for:
 6. Performance problems
 
 ## How to Leave Feedback
-${botToken ? `
-**IMPORTANT: A bot token is configured. Use this prefix for ALL gh commands:**
+
+**IMPORTANT: Submit only ONE review to avoid duplicate reviews on GitHub.**
+
+${botToken ? `A bot token is configured. Use this prefix for ALL gh commands:
 \`\`\`bash
 GH_TOKEN=\${BOT_TOKEN} gh pr review ...
-GH_TOKEN=\${BOT_TOKEN} gh pr comment ...
 \`\`\`
 The BOT_TOKEN environment variable is already set in this terminal.
 
-You can use formal reviews (approve/request-changes):
+Collect all your feedback and submit it in a SINGLE review command:
 
 \`\`\`bash
-# Post suggestions as review comments
-GH_TOKEN=\${BOT_TOKEN} gh pr review ${pr.number} --comment --body "**File: path/to/file.ts**
+# If the code looks good:
+GH_TOKEN=\${BOT_TOKEN} gh pr review ${pr.number} --approve --body "LGTM! Code looks good."
 
+# If there are issues to address:
+GH_TOKEN=\${BOT_TOKEN} gh pr review ${pr.number} --request-changes --body "## Review Feedback
+
+**File: path/to/file.ts**
 Description of the issue...
 
 \\\`\\\`\\\`suggestion
 // Your suggested fix here
 \\\`\\\`\\\`
-"
 
-# Final verdict
-GH_TOKEN=\${BOT_TOKEN} gh pr review ${pr.number} --approve --body "LGTM! Code looks good."
-# OR
-GH_TOKEN=\${BOT_TOKEN} gh pr review ${pr.number} --request-changes --body "Please address the issues above."
+**File: another/file.ts**
+Another issue...
+"
 \`\`\`
-` : `
-First, check if you can post formal reviews by running these commands:
+` : `First, check if you can post formal reviews by running these commands:
 \`\`\`bash
 # Get PR author
 PR_AUTHOR=$(gh pr view ${pr.number} --json author --jq .author.login)
@@ -448,31 +455,34 @@ echo "PR author: $PR_AUTHOR, Current user: $CURRENT_USER"
 \`\`\`
 
 ### If PR author ≠ Current user (reviewing someone else's PR):
-You can use formal reviews with approve/request-changes:
+Collect all your feedback and submit it in a SINGLE review command:
 
 \`\`\`bash
-# Post suggestions as review comments
-gh pr review ${pr.number} --comment --body "**File: path/to/file.ts**
+# If the code looks good:
+gh pr review ${pr.number} --approve --body "LGTM! Code looks good."
 
+# If there are issues to address:
+gh pr review ${pr.number} --request-changes --body "## Review Feedback
+
+**File: path/to/file.ts**
 Description of the issue...
 
 \\\`\\\`\\\`suggestion
 // Your suggested fix here
 \\\`\\\`\\\`
-"
 
-# Final verdict
-gh pr review ${pr.number} --approve --body "LGTM! Code looks good."
-# OR
-gh pr review ${pr.number} --request-changes --body "Please address the issues above."
+**File: another/file.ts**
+Another issue...
+"
 \`\`\`
 
 ### If PR author = Current user (reviewing your own PR):
 You can only post comments (GitHub doesn't allow self-review):
 
 \`\`\`bash
-gh pr comment ${pr.number} --body "**File: path/to/file.ts**
+gh pr comment ${pr.number} --body "## Self-Review Notes
 
+**File: path/to/file.ts**
 Description of the issue...
 
 \\\`\\\`\\\`suggestion
