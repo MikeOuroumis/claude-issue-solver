@@ -97,9 +97,6 @@ Instructions:
   const runnerContent = `#!/bin/bash
 cd "${worktreePath}"
 
-# Disable Oh My Zsh auto-update prompt to prevent blocking
-export DISABLE_AUTO_UPDATE="true"
-
 # Set terminal title
 echo -ne "\\033]0;Issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"').slice(0, 50)}\\007"
 
@@ -199,8 +196,8 @@ echo "To clean up after merge: claude-issue clean ${issueNumber}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Keep terminal open
-exec bash
+# Keep terminal open with minimal shell (skip rc files to avoid prompts)
+exec bash --norc --noprofile
 `;
 
   fs.writeFileSync(runnerScript, runnerContent, { mode: 0o755 });

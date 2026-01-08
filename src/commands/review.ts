@@ -197,9 +197,6 @@ Start by examining the diff and the changed files, then provide your review.`;
   const runnerContent = `#!/bin/bash
 cd "${projectRoot}"
 
-# Disable Oh My Zsh auto-update prompt to prevent blocking
-export DISABLE_AUTO_UPDATE="true"
-
 # Set bot token if configured
 ${botTokenEnv}
 
@@ -251,8 +248,8 @@ fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Keep terminal open
-exec bash
+# Keep terminal open with minimal shell (skip rc files to avoid prompts)
+exec bash --norc --noprofile
 `;
 
   fs.writeFileSync(runnerScript, runnerContent, { mode: 0o755 });
@@ -517,9 +514,6 @@ Start by examining the diff and the changed files, then provide your review.`;
   const runnerContent = `#!/bin/bash
 cd "${projectRoot}"
 
-# Disable Oh My Zsh auto-update prompt to prevent blocking
-export DISABLE_AUTO_UPDATE="true"
-
 # Set bot token if configured
 ${botTokenEnv}
 
@@ -571,8 +565,8 @@ fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Keep terminal open
-exec bash
+# Keep terminal open with minimal shell (skip rc files to avoid prompts)
+exec bash --norc --noprofile
 `;
 
   fs.writeFileSync(runnerScript, runnerContent, { mode: 0o755 });
