@@ -97,6 +97,9 @@ Instructions:
   const runnerContent = `#!/bin/bash
 cd "${worktreePath}"
 
+# Disable Oh My Zsh auto-update prompt to prevent blocking
+export DISABLE_AUTO_UPDATE="true"
+
 # Set terminal title
 echo -ne "\\033]0;Issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"').slice(0, 50)}\\007"
 
