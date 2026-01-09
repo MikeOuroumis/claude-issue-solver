@@ -116,6 +116,15 @@ echo "   Fetch it in main repo: git fetch origin ${branchName}"
 echo ""
 echo "Terminal will close in 3 seconds..."
 sleep 3
+
+# Close the terminal window (macOS)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+    osascript -e 'tell application "iTerm" to close (current window)' &
+  else
+    osascript -e 'tell application "Terminal" to close (first window whose selected tab contains (frontmost tab))' &
+  fi
+fi
 exit 0
 `;
 
