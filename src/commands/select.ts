@@ -2,9 +2,9 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { listIssues, getIssuesWithOpenPRs } from '../utils/github';
 import { getProjectName } from '../utils/git';
-import { solveCommand } from './solve';
+import { solveCommand, SolveOptions } from './solve';
 
-export async function selectCommand(): Promise<void> {
+export async function selectCommand(options: SolveOptions = {}): Promise<void> {
   const projectName = getProjectName();
   console.log(chalk.bold(`\nOpen issues for ${projectName}:\n`));
 
@@ -47,7 +47,7 @@ export async function selectCommand(): Promise<void> {
   console.log(chalk.cyan(`\nStarting ${issueNumbers.length} issue(s)...\n`));
 
   for (const issueNumber of issueNumbers) {
-    await solveCommand(issueNumber);
+    await solveCommand(issueNumber, options);
     console.log();
   }
 }

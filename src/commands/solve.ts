@@ -7,7 +7,11 @@ import { getIssue } from '../utils/github';
 import { getProjectRoot, getProjectName, branchExists, getDefaultBranch } from '../utils/git';
 import { slugify, copyEnvFiles, symlinkNodeModules, openInNewTerminal } from '../utils/helpers';
 
-export async function solveCommand(issueNumber: number): Promise<void> {
+export interface SolveOptions {
+  autoClose?: boolean;
+}
+
+export async function solveCommand(issueNumber: number, options: SolveOptions = {}): Promise<void> {
   const spinner = ora(`Fetching issue #${issueNumber}...`).start();
 
   const issue = getIssue(issueNumber);
@@ -94,6 +98,43 @@ Instructions:
 
   // Create runner script
   const runnerScript = path.join(worktreePath, '.claude-runner.sh');
+  const autoClose = options.autoClose || false;
+
+  const autoCloseEnding = `
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Claude session ended. Cleaning up worktree..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Remove worktree (need to cd out first)
+cd "${projectRoot}"
+git worktree remove "${worktreePath}" --force 2>/dev/null
+
+echo "✅ Worktree removed. Branch '${branchName}' preserved on remote."
+echo "   Fetch it in main repo: git fetch origin ${branchName}"
+echo ""
+echo "Terminal will close in 3 seconds..."
+sleep 3
+exit 0
+`;
+
+  const interactiveEnding = `
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Claude session ended. Terminal staying open."
+echo "To clean up after merge: claude-issue clean ${issueNumber}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Keep terminal open with minimal shell (skip rc files to avoid prompts)
+exec bash --norc --noprofile
+`;
+
+  const modeMessage = autoClose
+    ? 'Terminal will close after PR is created.'
+    : 'The terminal stays open for follow-up changes.';
+
   const runnerContent = `#!/bin/bash
 cd "${worktreePath}"
 
@@ -104,7 +145,7 @@ echo "🤖 Claude Code - Issue #${issueNumber}: ${issue.title}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "When Claude commits, a PR will be created automatically."
-echo "The terminal stays open for follow-up changes."
+echo "${modeMessage}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -187,18 +228,8 @@ rm -f '${promptFile}'
 kill $WATCHER_PID 2>/dev/null
 
 # Final PR check after Claude exits
-create_pr > /dev/null
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Claude session ended. Terminal staying open."
-echo "To clean up after merge: claude-issue clean ${issueNumber}"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-# Keep terminal open with minimal shell (skip rc files to avoid prompts)
-exec bash --norc --noprofile
-`;
+create_pr
+${autoClose ? autoCloseEnding : interactiveEnding}`;
 
   fs.writeFileSync(runnerScript, runnerContent, { mode: 0o755 });
 
