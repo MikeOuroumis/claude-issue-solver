@@ -109,10 +109,28 @@ echo ""
 
 # Remove worktree (need to cd out first)
 cd "${projectRoot}"
+
+# Try git worktree remove first
 git worktree remove "${worktreePath}" --force 2>/dev/null
 
-echo "✅ Worktree removed. Branch '${branchName}' preserved on remote."
-echo "   Fetch it in main repo: git fetch origin ${branchName}"
+# If folder still exists, force delete it
+if [ -d "${worktreePath}" ]; then
+  echo "Git worktree remove didn't fully clean up, force deleting..."
+  /bin/rm -rf "${worktreePath}" 2>/dev/null || rm -rf "${worktreePath}" 2>/dev/null
+fi
+
+# Prune any stale worktree references
+git worktree prune 2>/dev/null
+
+# Verify cleanup
+if [ -d "${worktreePath}" ]; then
+  echo "⚠️  Could not fully remove worktree. You may need to manually delete:"
+  echo "   rm -rf '${worktreePath}'"
+else
+  echo "✅ Worktree removed. Branch '${branchName}' preserved on remote."
+  echo "   Fetch it in main repo: git fetch origin ${branchName}"
+fi
+
 echo ""
 echo "Terminal will close in 3 seconds..."
 sleep 3
