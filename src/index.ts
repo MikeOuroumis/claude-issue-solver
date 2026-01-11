@@ -56,17 +56,18 @@ program.hook('preAction', (thisCommand) => {
 // Default command - interactive selection
 program
   .argument('[issue]', 'Issue number to solve')
-  .option('-c, --auto-close', 'Close terminal and clean up worktree after PR is created')
-  .action(async (issue: string | undefined, options: { autoClose?: boolean }) => {
+  .option('-k, --keep', 'Keep terminal and worktree open after PR is created (default: auto-close)')
+  .action(async (issue: string | undefined, options: { keep?: boolean }) => {
+    const solveOptions = { autoClose: !options.keep };
     if (issue) {
       const issueNumber = parseInt(issue, 10);
       if (isNaN(issueNumber)) {
         console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
         process.exit(1);
       }
-      await solveCommand(issueNumber, { autoClose: options.autoClose });
+      await solveCommand(issueNumber, solveOptions);
     } else {
-      await selectCommand(options);
+      await selectCommand(solveOptions);
     }
   });
 
