@@ -149,8 +149,8 @@ exit 0
   const interactiveEnding = `
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Claude session ended. Terminal staying open (--keep mode)."
-echo "To clean up: claude-issue clean ${issueNumber}"
+echo "Claude session ended. Terminal staying open."
+echo "To clean up after merge: claude-issue clean ${issueNumber}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -159,8 +159,8 @@ exec bash --norc --noprofile
 `;
 
   const modeMessage = autoClose
-    ? 'Worktree will be cleaned up after session ends.'
-    : 'Terminal and worktree will stay open (--keep mode).';
+    ? 'Terminal will close after PR is created.'
+    : 'The terminal stays open for follow-up changes.';
 
   const runnerContent = `#!/bin/bash
 cd "${worktreePath}"
