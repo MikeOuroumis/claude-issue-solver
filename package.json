@@ -1,6 +1,6 @@
 {
   "name": "claude-issue-solver",
-  "version": "1.40.1",
+  "version": "1.41.0",
   "description": "Automatically solve GitHub issues using Claude Code",
   "main": "dist/index.js",
   "bin": {
@@ -10,6 +10,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "ts-node src/index.ts",
+    "test": "vitest",
+    "test:run": "vitest run",
     "prepublishOnly": "npm run build",
     "release": "npx ts-node scripts/release.ts"
   },
@@ -37,7 +39,8 @@
     "@types/inquirer": "^8.2.10",
     "@types/node": "^20.10.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.17"
   },
   "engines": {
     "node": ">=18.0.0"

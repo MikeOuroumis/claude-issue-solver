@@ -3,112 +3,11 @@ import ora from 'ora';
 import inquirer from 'inquirer';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { execSync } from 'child_process';
 import { getIssueStatus, getPRForBranch, getIssueStatusAsync, getPRForBranchAsync, IssueStatus, PRStatus } from '../utils/github';
 import { getProjectRoot, getProjectName, exec } from '../utils/git';
 import { slugify } from '../utils/helpers';
-
-function closeWindowsWithPath(folderPath: string, issueNumber: string, prNumber?: string): void {
-  if (os.platform() !== 'darwin') return;
-
-  const folderName = path.basename(folderPath);
-  const issuePattern = `Issue #${issueNumber}`;
-  const reviewPattern = prNumber ? `Review PR #${prNumber}` : `issue-${issueNumber}-`;
-
-  // Try to close iTerm2 tabs/windows with this path, issue number, or review PR
-  try {
-    execSync(`osascript -e '
-      tell application "iTerm"
-        repeat with w in windows
-          try
-            set windowName to name of w
-            if windowName contains "${folderName}" or windowName contains "${issuePattern}" or windowName contains "${reviewPattern}" then
-              close w
-            end if
-          end try
-          repeat with t in tabs of w
-            repeat with s in sessions of t
-              try
-                set sessionName to name of s
-                if sessionName contains "${folderName}" or sessionName contains "${issuePattern}" or sessionName contains "${reviewPattern}" then
-                  close s
-                end if
-              end try
-            end repeat
-          end repeat
-        end repeat
-      end tell
-    '`, { stdio: 'pipe' });
-  } catch {
-    // iTerm not running or no matching sessions
-  }
-
-  // Try to close Terminal.app windows with this path, issue number, or review PR
-  try {
-    execSync(`osascript -e '
-      tell application "Terminal"
-        repeat with w in windows
-          set windowName to name of w
-          if windowName contains "${folderName}" or windowName contains "${issuePattern}" or windowName contains "${reviewPattern}" then
-            close w
-          end if
-        end repeat
-      end tell
-    '`, { stdio: 'pipe' });
-  } catch {
-    // Terminal not running or no matching windows
-  }
-
-  // Try to close VS Code windows with this path
-  // Method 1: AppleScript to close windows matching the folder name
-  try {
-    execSync(`osascript -e '
-      tell application "System Events"
-        if exists process "Code" then
-          tell process "Code"
-            set windowList to every window
-            repeat with w in windowList
-              try
-                set windowName to name of w
-                if windowName contains "${folderName}" then
-                  perform action "AXPress" of (first button of w whose subrole is "AXCloseButton")
-                  delay 0.2
-                end if
-              end try
-            end repeat
-          end tell
-        end if
-      end tell
-    '`, { stdio: 'pipe', timeout: 5000 });
-  } catch {
-    // VS Code not running or no matching windows
-  }
-
-  // Method 2: Also try matching the issue number in window title
-  try {
-    execSync(`osascript -e '
-      tell application "System Events"
-        if exists process "Code" then
-          tell process "Code"
-            set windowList to every window
-            repeat with w in windowList
-              try
-                set windowName to name of w
-                if windowName contains "${issuePattern}" then
-                  perform action "AXPress" of (first button of w whose subrole is "AXCloseButton")
-                  delay 0.2
-                end if
-              end try
-            end repeat
-          end tell
-        end if
-      end tell
-    '`, { stdio: 'pipe', timeout: 5000 });
-  } catch {
-    // VS Code not running or no matching windows
-  }
-}
+import { closeWindowsForWorktree } from '../utils/terminal';
 
 interface Worktree {
   path: string;
@@ -278,13 +177,16 @@ export async function cleanAllCommand(): Promise<void> {
 
     try {
       // Close terminal and VS Code windows for this worktree
-      try {
-        closeWindowsWithPath(wt.path, wt.issueNumber);
-        // Give windows time to close before removing folder
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      } catch {
-        // Ignore errors closing windows
-      }
+      // Get PR number for this worktree if available
+      const wtStatus = worktreesWithStatus.find((w) => w.issueNumber === wt.issueNumber);
+      const prNum = wtStatus?.prStatus?.number?.toString();
+      closeWindowsForWorktree({
+        folderPath: wt.path,
+        issueNumber: wt.issueNumber,
+        prNumber: prNum,
+      });
+      // Give windows time to close before removing folder
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Remove worktree/folder
       const isOrphaned = !wt.branch;
@@ -447,13 +349,18 @@ export async function cleanCommand(issueNumber: number): Promise<void> {
 
   // Close terminal and VS Code windows for this worktree
   const windowSpinner = ora('Closing terminal and VS Code windows...').start();
-  try {
-    closeWindowsWithPath(worktreePath, String(issueNumber));
-    // Give windows time to close before removing folder
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  const prNum = prStatus?.number?.toString();
+  const closeResult = closeWindowsForWorktree({
+    folderPath: worktreePath,
+    issueNumber: String(issueNumber),
+    prNumber: prNum,
+  });
+  // Give windows time to close before removing folder
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  if (closeResult.iTerm || closeResult.terminal || closeResult.vscode) {
     windowSpinner.succeed('Windows closed');
-  } catch {
-    windowSpinner.warn('Could not close some windows');
+  } else {
+    windowSpinner.info('No matching windows found');
   }
 
   // Remove worktree/folder
@@ -590,12 +497,13 @@ export async function cleanMergedCommand(): Promise<void> {
 
     try {
       // Close terminal and VS Code windows for this worktree
-      try {
-        closeWindowsWithPath(wt.path, wt.issueNumber);
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      } catch {
-        // Ignore errors closing windows
-      }
+      const prNum = wt.prStatus?.number?.toString();
+      closeWindowsForWorktree({
+        folderPath: wt.path,
+        issueNumber: wt.issueNumber,
+        prNumber: prNum,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Remove worktree/folder
       const isOrphaned = !wt.branch;

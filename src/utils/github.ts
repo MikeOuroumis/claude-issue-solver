@@ -104,6 +104,7 @@ export interface IssueStatus {
 }
 
 export interface PRStatus {
+  number: number;
   state: 'open' | 'closed' | 'merged';
   url: string;
 }
@@ -138,12 +139,13 @@ export async function getIssueStatusAsync(issueNumber: number): Promise<IssueSta
 export function getPRForBranch(branch: string): PRStatus | null {
   try {
     const output = execSync(
-      `gh pr list --head "${branch}" --state all --json state,url --limit 1`,
+      `gh pr list --head "${branch}" --state all --json number,state,url --limit 1`,
       { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
     const data = JSON.parse(output);
     if (data.length === 0) return null;
     return {
+      number: data[0].number,
       state: data[0].state.toLowerCase() as 'open' | 'closed' | 'merged',
       url: data[0].url,
     };
@@ -154,10 +156,11 @@ export function getPRForBranch(branch: string): PRStatus | null {
 
 export async function getPRForBranchAsync(branch: string): Promise<PRStatus | null> {
   try {
-    const { stdout } = await execAsync(`gh pr list --head "${branch}" --state all --json state,url --limit 1`);
+    const { stdout } = await execAsync(`gh pr list --head "${branch}" --state all --json number,state,url --limit 1`);
     const data = JSON.parse(stdout);
     if (data.length === 0) return null;
     return {
+      number: data[0].number,
       state: data[0].state.toLowerCase() as 'open' | 'closed' | 'merged',
       url: data[0].url,
     };
