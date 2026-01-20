@@ -8,7 +8,7 @@ import { listCommand } from './commands/list';
 import { solveCommand } from './commands/solve';
 import { prCommand } from './commands/pr';
 import { cleanCommand, cleanAllCommand, cleanMergedCommand } from './commands/clean';
-import { selectCommand } from './commands/select';
+import { selectCommand, SelectOptions } from './commands/select';
 import { goCommand } from './commands/go';
 import { newCommand } from './commands/new';
 import { initCommand } from './commands/init';
@@ -57,7 +57,9 @@ program.hook('preAction', (thisCommand) => {
 program
   .argument('[issue]', 'Issue number to solve')
   .option('-c, --auto-close', 'Close terminal and clean up worktree after PR is created')
-  .action(async (issue: string | undefined, options: { autoClose?: boolean }) => {
+  .option('-n, --limit <number>', 'Maximum number of issues to show', (val) => parseInt(val, 10))
+  .option('--all', 'Show all issues (no limit)')
+  .action(async (issue: string | undefined, options: SelectOptions & { autoClose?: boolean }) => {
     if (issue) {
       const issueNumber = parseInt(issue, 10);
       if (isNaN(issueNumber)) {
