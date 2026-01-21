@@ -40,11 +40,16 @@ export function checkRequirements(): { ok: boolean; missing: string[] } {
 
 /**
  * Generate AppleScript for opening a script in iTerm2.
+ * Changes to the script's directory first so the session path matches the worktree.
  * Sends 'n' first to dismiss any oh-my-zsh update prompts, then runs the script with bash.
  */
 export function generateITermOpenScript(script: string): string {
   const escapedScript = script.replace(/"/g, '\\"');
-  const bashCommand = `/bin/bash "${escapedScript}"`;
+  // Extract directory from script path to set as working directory
+  const scriptDir = path.dirname(script.replace(/'/g, ''));
+  const escapedDir = scriptDir.replace(/"/g, '\\"');
+  // cd to the script's directory first, so session path matches worktree
+  const bashCommand = `cd "${escapedDir}" && /bin/bash "${escapedScript}"`;
 
   return `
       tell application "iTerm"
@@ -61,11 +66,16 @@ export function generateITermOpenScript(script: string): string {
 
 /**
  * Generate AppleScript for opening a script in Terminal.app.
+ * Changes to the script's directory first so the session path matches the worktree.
  * Sends 'n' first to dismiss any oh-my-zsh update prompts, then runs the script with bash.
  */
 export function generateTerminalOpenScript(script: string): string {
   const escapedScript = script.replace(/"/g, '\\"');
-  const bashCommand = `/bin/bash "${escapedScript}"`;
+  // Extract directory from script path to set as working directory
+  const scriptDir = path.dirname(script.replace(/'/g, ''));
+  const escapedDir = scriptDir.replace(/"/g, '\\"');
+  // cd to the script's directory first, so session path matches worktree
+  const bashCommand = `cd "${escapedDir}" && /bin/bash "${escapedScript}"`;
 
   return `
       tell application "Terminal"

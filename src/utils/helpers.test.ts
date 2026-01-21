@@ -133,4 +133,30 @@ describe('helpers utilities', () => {
       expect(script).toMatch(/do script "n;.*\/bin\/bash/);
     });
   });
+
+  describe('working directory for terminal closing', () => {
+    it('iTerm script should cd to script directory before running', () => {
+      const script = generateITermOpenScript('/path/to/worktree/.claude-runner.sh');
+
+      // Should cd to the script's directory first (quotes are escaped in AppleScript)
+      expect(script).toContain('cd \\"/path/to/worktree\\"');
+      expect(script).toContain('/bin/bash');
+    });
+
+    it('Terminal script should cd to script directory before running', () => {
+      const script = generateTerminalOpenScript('/path/to/worktree/.claude-runner.sh');
+
+      // Should cd to the script's directory first (quotes are escaped in AppleScript)
+      expect(script).toContain('cd \\"/path/to/worktree\\"');
+      expect(script).toContain('/bin/bash');
+    });
+
+    it('should handle script paths with quotes', () => {
+      const script = generateITermOpenScript('/path/to/work"tree/.script.sh');
+
+      expect(script).toContain('/bin/bash');
+      // Path should be escaped
+      expect(script).toContain('work');
+    });
+  });
 });
