@@ -53,58 +53,39 @@ export function generateITermCloseScript(patterns: string[]): string {
   return `
 tell application "iTerm"
   set windowsToClose to {}
-  set sessionsToClose to {}
 
-  -- First pass: collect windows and sessions to close
+  -- First pass: collect windows to close (by name or by session working directory)
   repeat with w in windows
     try
       set windowName to name of w
       set windowId to id of w
-      ${escapedPatterns.map((p) => `if windowName contains "${p}" then set end of windowsToClose to windowId`).join('\n      ')}
-    end try
+      set shouldClose to false
 
-    -- Check tabs and sessions - match by name OR working directory path
-    repeat with t in tabs of w
-      repeat with s in sessions of t
-        try
-          set sessionName to name of s
-          set sessionPath to ""
-          try
-            set sessionPath to path of s
-          end try
-          set sessionId to unique id of s
-          -- Match by session name
-          ${escapedPatterns.map((p) => `if sessionName contains "${p}" then set end of sessionsToClose to {windowId, sessionId}`).join('\n          ')}
-          -- Match by working directory path (more reliable)
-          ${escapedPatterns.map((p) => `if sessionPath contains "${p}" then set end of sessionsToClose to {windowId, sessionId}`).join('\n          ')}
-        end try
-      end repeat
-    end repeat
-  end repeat
+      -- Match by window name
+      ${escapedPatterns.map((p) => `if windowName contains "${p}" then set shouldClose to true`).join('\n      ')}
 
-  -- Second pass: close sessions first (from windows not being fully closed)
-  repeat with sessionInfo in sessionsToClose
-    try
-      set targetWindowId to item 1 of sessionInfo
-      set targetSessionId to item 2 of sessionInfo
-      -- Only close session if its window isn't being closed entirely
-      if windowsToClose does not contain targetWindowId then
-        repeat with w in windows
-          if id of w is targetWindowId then
-            repeat with t in tabs of w
-              repeat with s in sessions of t
-                if unique id of s is targetSessionId then
-                  close s
-                end if
-              end repeat
-            end repeat
-          end if
+      -- Match by session working directory path (more reliable)
+      if not shouldClose then
+        repeat with t in tabs of w
+          repeat with s in sessions of t
+            try
+              set sessionPath to ""
+              try
+                set sessionPath to path of s
+              end try
+              ${escapedPatterns.map((p) => `if sessionPath contains "${p}" then set shouldClose to true`).join('\n              ')}
+            end try
+          end repeat
         end repeat
+      end if
+
+      if shouldClose and windowsToClose does not contain windowId then
+        set end of windowsToClose to windowId
       end if
     end try
   end repeat
 
-  -- Third pass: close entire windows
+  -- Second pass: close windows
   repeat with targetWindowId in windowsToClose
     try
       repeat with w in windows

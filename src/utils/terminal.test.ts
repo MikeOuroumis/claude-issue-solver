@@ -85,7 +85,6 @@ describe('terminal utilities', () => {
       expect(script).toContain('project-issue-42');
       expect(script).toContain('Issue #42');
       expect(script).toContain('windowsToClose');
-      expect(script).toContain('sessionsToClose');
     });
 
     it('should escape double quotes in patterns', () => {
@@ -99,12 +98,10 @@ describe('terminal utilities', () => {
       const patterns = ['test'];
       const script = generateITermCloseScript(patterns);
 
-      // First pass collects
+      // First pass collects windows to close
       expect(script).toContain('First pass: collect');
-      // Second pass closes sessions
-      expect(script).toContain('Second pass: close sessions');
-      // Third pass closes windows
-      expect(script).toContain('Third pass: close entire windows');
+      // Second pass closes windows
+      expect(script).toContain('Second pass: close windows');
     });
 
     it('should match by session working directory path', () => {
