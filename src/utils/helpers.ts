@@ -38,18 +38,15 @@ export function checkRequirements(): { ok: boolean; missing: string[] } {
   return { ok: missing.length === 0, missing };
 }
 
-export function openInNewTerminal(script: string): void {
-  const platform = os.platform();
+/**
+ * Generate AppleScript for opening a script in iTerm2.
+ * Sends 'n' first to dismiss any oh-my-zsh update prompts, then runs the script with bash.
+ */
+export function generateITermOpenScript(script: string): string {
+  const escapedScript = script.replace(/"/g, '\\"');
+  const bashCommand = `/bin/bash "${escapedScript}"`;
 
-  if (platform === 'darwin') {
-    // macOS - try iTerm2 first, then Terminal
-    // Use /bin/bash explicitly to bypass interactive shell issues (e.g., oh-my-zsh update prompts)
-    // Send 'n' first to dismiss any oh-my-zsh update prompt, then run the script
-    const escapedScript = script.replace(/"/g, '\\"');
-    const bashCommand = `/bin/bash "${escapedScript}"`;
-
-    // For iTerm: send 'n' to dismiss any prompt, wait briefly, then run the command
-    const iTermScript = `
+  return `
       tell application "iTerm"
         activate
         set newWindow to (create window with default profile)
@@ -60,14 +57,31 @@ export function openInNewTerminal(script: string): void {
         end tell
       end tell
     `;
+}
 
-    // For Terminal: combine dismissing prompt and running command
-    const terminalScript = `
+/**
+ * Generate AppleScript for opening a script in Terminal.app.
+ * Sends 'n' first to dismiss any oh-my-zsh update prompts, then runs the script with bash.
+ */
+export function generateTerminalOpenScript(script: string): string {
+  const escapedScript = script.replace(/"/g, '\\"');
+  const bashCommand = `/bin/bash "${escapedScript}"`;
+
+  return `
       tell application "Terminal"
         activate
         do script "n; ${bashCommand.replace(/"/g, '\\"')}"
       end tell
     `;
+}
+
+export function openInNewTerminal(script: string): void {
+  const platform = os.platform();
+
+  if (platform === 'darwin') {
+    // macOS - try iTerm2 first, then Terminal
+    const iTermScript = generateITermOpenScript(script);
+    const terminalScript = generateTerminalOpenScript(script);
 
     try {
       // Check if iTerm is installed

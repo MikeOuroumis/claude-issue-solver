@@ -16,6 +16,11 @@ export function getSearchPatterns(options: CloseTerminalOptions): string[] {
 
   const patterns: string[] = [];
 
+  // Full folder path (most reliable for working directory matching)
+  if (folderPath) {
+    patterns.push(folderPath);
+  }
+
   // Folder name pattern (e.g., "project-issue-38-slug")
   if (folderName) {
     patterns.push(folderName);
@@ -39,6 +44,7 @@ export function getSearchPatterns(options: CloseTerminalOptions): string[] {
 /**
  * Generate AppleScript to close iTerm2 windows/tabs matching patterns
  * Uses a two-pass approach: first collect IDs, then close them
+ * Matches both window names AND session working directories for reliability
  */
 export function generateITermCloseScript(patterns: string[]): string {
   // Escape patterns for AppleScript string comparison
@@ -57,13 +63,20 @@ tell application "iTerm"
       ${escapedPatterns.map((p) => `if windowName contains "${p}" then set end of windowsToClose to windowId`).join('\n      ')}
     end try
 
-    -- Check tabs and sessions
+    -- Check tabs and sessions - match by name OR working directory path
     repeat with t in tabs of w
       repeat with s in sessions of t
         try
           set sessionName to name of s
+          set sessionPath to ""
+          try
+            set sessionPath to path of s
+          end try
           set sessionId to unique id of s
+          -- Match by session name
           ${escapedPatterns.map((p) => `if sessionName contains "${p}" then set end of sessionsToClose to {windowId, sessionId}`).join('\n          ')}
+          -- Match by working directory path (more reliable)
+          ${escapedPatterns.map((p) => `if sessionPath contains "${p}" then set end of sessionsToClose to {windowId, sessionId}`).join('\n          ')}
         end try
       end repeat
     end repeat
@@ -194,6 +207,58 @@ export function executeAppleScript(script: string, timeout: number = 5000): bool
 }
 
 /**
+ * Find and terminate shell processes running in the given directory
+ * This is a fallback approach when AppleScript matching fails
+ */
+export function killProcessesInDirectory(dirPath: string): boolean {
+  if (os.platform() !== 'darwin' && os.platform() !== 'linux') {
+    return false;
+  }
+
+  try {
+    // Use lsof to find processes with their current working directory in the target path
+    // +D flag finds processes with files open in the directory (including cwd)
+    const output = execSync(`lsof +D "${dirPath}" 2>/dev/null || true`, {
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+
+    if (!output.trim()) {
+      return false;
+    }
+
+    // Parse lsof output to get PIDs of shell processes
+    const lines = output.split('\n').slice(1); // Skip header
+    const pids = new Set<string>();
+
+    for (const line of lines) {
+      const parts = line.split(/\s+/);
+      if (parts.length >= 2) {
+        const command = parts[0].toLowerCase();
+        const pid = parts[1];
+        // Only kill shell processes and their children, not system processes
+        if (['bash', 'zsh', 'sh', 'fish', 'claude', 'node'].some(s => command.includes(s))) {
+          pids.add(pid);
+        }
+      }
+    }
+
+    // Send SIGTERM to each process
+    for (const pid of pids) {
+      try {
+        execSync(`kill -TERM ${pid} 2>/dev/null || true`, { stdio: 'pipe' });
+      } catch {
+        // Process may have already exited
+      }
+    }
+
+    return pids.size > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Close terminal windows and VS Code windows associated with a worktree
  * Returns an object indicating which applications had windows closed
  */
@@ -201,9 +266,10 @@ export function closeWindowsForWorktree(options: CloseTerminalOptions): {
   iTerm: boolean;
   terminal: boolean;
   vscode: boolean;
+  processes: boolean;
 } {
   if (os.platform() !== 'darwin') {
-    return { iTerm: false, terminal: false, vscode: false };
+    return { iTerm: false, terminal: false, vscode: false, processes: false };
   }
 
   const patterns = getSearchPatterns(options);
@@ -220,9 +286,13 @@ export function closeWindowsForWorktree(options: CloseTerminalOptions): {
   const vscodeScript = generateVSCodeCloseScript(patterns);
   const vscodeResult = executeAppleScript(vscodeScript, 10000);
 
+  // Fallback: kill processes running in the worktree directory
+  const processResult = killProcessesInDirectory(options.folderPath);
+
   return {
     iTerm: iTermResult,
     terminal: terminalResult,
     vscode: vscodeResult,
+    processes: processResult,
   };
 }

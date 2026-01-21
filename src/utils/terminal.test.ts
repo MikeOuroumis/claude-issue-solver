@@ -5,6 +5,7 @@ import {
   generateTerminalCloseScript,
   generateVSCodeCloseScript,
   closeWindowsForWorktree,
+  killProcessesInDirectory,
   CloseTerminalOptions,
 } from './terminal';
 
@@ -18,9 +19,23 @@ describe('terminal utilities', () => {
 
       const patterns = getSearchPatterns(options);
 
+      // Should include full path for working directory matching
+      expect(patterns).toContain('/Users/test/project-issue-42-fix-bug');
       expect(patterns).toContain('project-issue-42-fix-bug');
       expect(patterns).toContain('Issue #42');
       expect(patterns).toContain('issue-42-');
+    });
+
+    it('should include full folder path for working directory matching', () => {
+      const options: CloseTerminalOptions = {
+        folderPath: '/Users/dev/myproject-issue-123-feature',
+        issueNumber: '123',
+      };
+
+      const patterns = getSearchPatterns(options);
+
+      // Full path should be first for best matching
+      expect(patterns[0]).toBe('/Users/dev/myproject-issue-123-feature');
     });
 
     it('should include PR patterns when prNumber is provided', () => {
@@ -91,6 +106,16 @@ describe('terminal utilities', () => {
       // Third pass closes windows
       expect(script).toContain('Third pass: close entire windows');
     });
+
+    it('should match by session working directory path', () => {
+      const patterns = ['/Users/test/worktree'];
+      const script = generateITermCloseScript(patterns);
+
+      // Should include path matching
+      expect(script).toContain('set sessionPath to');
+      expect(script).toContain('path of s');
+      expect(script).toContain('sessionPath contains');
+    });
   });
 
   describe('generateTerminalCloseScript', () => {
@@ -151,9 +176,11 @@ describe('terminal utilities', () => {
       expect(result).toHaveProperty('iTerm');
       expect(result).toHaveProperty('terminal');
       expect(result).toHaveProperty('vscode');
+      expect(result).toHaveProperty('processes');
       expect(typeof result.iTerm).toBe('boolean');
       expect(typeof result.terminal).toBe('boolean');
       expect(typeof result.vscode).toBe('boolean');
+      expect(typeof result.processes).toBe('boolean');
     });
 
     it('should handle prNumber parameter', () => {
@@ -166,6 +193,7 @@ describe('terminal utilities', () => {
       expect(result).toHaveProperty('iTerm');
       expect(result).toHaveProperty('terminal');
       expect(result).toHaveProperty('vscode');
+      expect(result).toHaveProperty('processes');
     });
   });
 
@@ -226,7 +254,8 @@ describe('terminal utilities', () => {
 
       // Script should be syntactically valid (quotes should be escaped)
       expect(script).toContain('test\\"pattern');
-      expect(script).not.toContain('""'); // No empty quotes from bad escaping
+      // Should not have broken string like contains "" (empty pattern)
+      expect(script).not.toMatch(/contains ""/);
     });
 
     it('should not have nested quotes issues in Terminal script', () => {
@@ -241,6 +270,18 @@ describe('terminal utilities', () => {
       const script = generateVSCodeCloseScript(patterns);
 
       expect(script).toContain('test\\"pattern');
+    });
+  });
+
+  describe('killProcessesInDirectory', () => {
+    it('should return false for non-existent directory', () => {
+      const result = killProcessesInDirectory('/nonexistent/path/that/does/not/exist');
+      expect(result).toBe(false);
+    });
+
+    it('should return boolean result', () => {
+      const result = killProcessesInDirectory('/tmp');
+      expect(typeof result).toBe('boolean');
     });
   });
 });
