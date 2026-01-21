@@ -43,20 +43,29 @@ export function openInNewTerminal(script: string): void {
 
   if (platform === 'darwin') {
     // macOS - try iTerm2 first, then Terminal
+    // Use /bin/bash explicitly to bypass interactive shell issues (e.g., oh-my-zsh update prompts)
+    // Send 'n' first to dismiss any oh-my-zsh update prompt, then run the script
+    const escapedScript = script.replace(/"/g, '\\"');
+    const bashCommand = `/bin/bash "${escapedScript}"`;
+
+    // For iTerm: send 'n' to dismiss any prompt, wait briefly, then run the command
     const iTermScript = `
       tell application "iTerm"
         activate
         set newWindow to (create window with default profile)
         tell current session of newWindow
-          write text "${script.replace(/"/g, '\\"')}"
+          write text "n"
+          delay 0.3
+          write text "${bashCommand.replace(/"/g, '\\"')}"
         end tell
       end tell
     `;
 
+    // For Terminal: combine dismissing prompt and running command
     const terminalScript = `
       tell application "Terminal"
         activate
-        do script "${script.replace(/"/g, '\\"')}"
+        do script "n; ${bashCommand.replace(/"/g, '\\"')}"
       end tell
     `;
 
