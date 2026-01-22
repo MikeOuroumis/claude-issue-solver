@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   getSearchPatterns,
   generateITermCloseScript,
+  generateITermCloseByTTYScript,
   generateTerminalCloseScript,
   generateVSCodeCloseScript,
   closeWindowsForWorktree,
   killProcessesInDirectory,
+  findTTYsInDirectory,
   CloseTerminalOptions,
 } from './terminal';
 
@@ -279,6 +281,39 @@ describe('terminal utilities', () => {
     it('should return boolean result', () => {
       const result = killProcessesInDirectory('/tmp');
       expect(typeof result).toBe('boolean');
+    });
+  });
+
+  describe('findTTYsInDirectory', () => {
+    it('should return empty array for non-existent directory', () => {
+      const result = findTTYsInDirectory('/nonexistent/path/that/does/not/exist');
+      expect(result).toEqual([]);
+    });
+
+    it('should return array', () => {
+      const result = findTTYsInDirectory('/tmp');
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+
+  describe('generateITermCloseByTTYScript', () => {
+    it('should return empty string for empty TTY array', () => {
+      const script = generateITermCloseByTTYScript([]);
+      expect(script).toBe('');
+    });
+
+    it('should generate valid AppleScript for single TTY', () => {
+      const script = generateITermCloseByTTYScript(['/dev/ttys001']);
+
+      expect(script).toContain('tell application "iTerm"');
+      expect(script).toContain('tty of s is "/dev/ttys001"');
+      expect(script).toContain('close w');
+    });
+
+    it('should generate OR conditions for multiple TTYs', () => {
+      const script = generateITermCloseByTTYScript(['/dev/ttys001', '/dev/ttys002']);
+
+      expect(script).toContain('tty of s is "/dev/ttys001" or tty of s is "/dev/ttys002"');
     });
   });
 });

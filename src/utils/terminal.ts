@@ -188,6 +188,92 @@ export function executeAppleScript(script: string, timeout: number = 5000): bool
 }
 
 /**
+ * Find TTYs associated with processes in the given directory
+ */
+export function findTTYsInDirectory(dirPath: string): string[] {
+  if (os.platform() !== 'darwin' && os.platform() !== 'linux') {
+    return [];
+  }
+
+  try {
+    // Use lsof to find processes with files open in the directory
+    const output = execSync(`lsof +D "${dirPath}" 2>/dev/null || true`, {
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+
+    if (!output.trim()) {
+      return [];
+    }
+
+    // Parse lsof output to get TTYs
+    const lines = output.split('\n').slice(1); // Skip header
+    const ttys = new Set<string>();
+
+    for (const line of lines) {
+      const parts = line.split(/\s+/);
+      // lsof output: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
+      // We want to find the FD column that shows the tty
+      if (parts.length >= 9) {
+        const fd = parts[3];
+        const type = parts[4];
+        const name = parts[8];
+
+        // Look for tty file descriptors
+        if ((fd === '0u' || fd === '1u' || fd === '2u') && name.startsWith('/dev/ttys')) {
+          ttys.add(name);
+        }
+      }
+    }
+
+    return Array.from(ttys);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Generate AppleScript to close iTerm2 windows by TTY
+ */
+export function generateITermCloseByTTYScript(ttys: string[]): string {
+  if (ttys.length === 0) return '';
+
+  const ttyConditions = ttys.map(tty => `tty of s is "${tty}"`).join(' or ');
+
+  return `
+tell application "iTerm"
+  set windowsToClose to {}
+
+  repeat with w in windows
+    set windowId to id of w
+    repeat with t in tabs of w
+      repeat with s in sessions of t
+        try
+          if ${ttyConditions} then
+            if windowsToClose does not contain windowId then
+              set end of windowsToClose to windowId
+            end if
+          end if
+        end try
+      end repeat
+    end repeat
+  end repeat
+
+  repeat with targetWindowId in windowsToClose
+    try
+      repeat with w in windows
+        if id of w is targetWindowId then
+          close w
+          exit repeat
+        end if
+      end repeat
+    end try
+  end repeat
+end tell
+`;
+}
+
+/**
  * Find and terminate shell processes running in the given directory
  * This is a fallback approach when AppleScript matching fails
  */
@@ -255,11 +341,25 @@ export function closeWindowsForWorktree(options: CloseTerminalOptions): {
 
   const patterns = getSearchPatterns(options);
 
-  // Try to close iTerm2 windows/sessions
-  const iTermScript = generateITermCloseScript(patterns);
-  const iTermResult = executeAppleScript(iTermScript);
+  // First, find TTYs associated with processes in the worktree
+  // This is the most reliable way to identify the terminal
+  const ttys = findTTYsInDirectory(options.folderPath);
 
-  // Try to close Terminal.app windows
+  let iTermResult = false;
+
+  // Try to close iTerm2 by TTY first (most reliable)
+  if (ttys.length > 0) {
+    const iTermTTYScript = generateITermCloseByTTYScript(ttys);
+    iTermResult = executeAppleScript(iTermTTYScript);
+  }
+
+  // Fall back to pattern-based matching if TTY approach didn't work
+  if (!iTermResult) {
+    const iTermScript = generateITermCloseScript(patterns);
+    iTermResult = executeAppleScript(iTermScript);
+  }
+
+  // Try to close Terminal.app windows (pattern-based)
   const terminalScript = generateTerminalCloseScript(patterns);
   const terminalResult = executeAppleScript(terminalScript);
 
