@@ -50,9 +50,10 @@ export function generateTerminalOpenScript(script: string): string {
   // cd to the script's directory first, so session path matches worktree
   const bashCommand = `cd \\"${escapedDir}\\" && /bin/bash \\"${escapedScript}\\"`;
 
+  // Create a new window and run the command in it
   return `tell application "Terminal"
-activate
 do script "${bashCommand}"
+activate
 end tell`;
 }
 
