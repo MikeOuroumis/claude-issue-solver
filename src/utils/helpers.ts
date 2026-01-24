@@ -60,30 +60,28 @@ end tell`;
 export function openInNewTerminal(script: string): void {
   const platform = os.platform();
 
+  // Strip any surrounding quotes from the script path
+  const cleanScript = script.replace(/^['"]|['"]$/g, '');
+
   if (platform === 'darwin') {
-    // macOS - use Terminal.app (always available, no session restoration issues)
-    const terminalScript = generateTerminalOpenScript(script);
+    // macOS - use 'open' command which doesn't require automation permissions
+    // Create a .command file which Terminal will execute when opened
+    const commandFile = cleanScript.replace(/\.sh$/, '.command');
 
-    // Use spawnSync with stdin to avoid shell escaping issues
-    const result = spawnSync('osascript', [], {
-      input: terminalScript,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    try {
+      // Copy the script to a .command file (Terminal executes these automatically)
+      fs.copyFileSync(cleanScript, commandFile);
+      fs.chmodSync(commandFile, '755');
 
-    if (result.status !== 0) {
-      const stderr = result.stderr?.toString() || '';
-
-      // Check for automation permission error
-      if (stderr.includes('-1743') || stderr.includes('Not authorised')) {
-        console.log('\n⚠️  macOS automation permission required!\n');
-        console.log('To fix this, go to:');
-        console.log('  System Settings → Privacy & Security → Automation\n');
-        console.log('Then enable "Terminal" for the app you\'re running this from.');
-        console.log('\nAfter granting permission, run the command again.\n');
+      // Prefer iTerm if installed, otherwise use default Terminal
+      if (fs.existsSync('/Applications/iTerm.app')) {
+        execSync(`open -a iTerm "${commandFile}"`, { stdio: 'pipe' });
       } else {
-        console.log('Could not open new terminal. Run manually:');
+        execSync(`open "${commandFile}"`, { stdio: 'pipe' });
       }
-      console.log(script);
+    } catch {
+      console.log('Could not open new terminal. Run manually:');
+      console.log(cleanScript);
     }
   } else if (platform === 'linux') {
     // Linux - try common terminal emulators
