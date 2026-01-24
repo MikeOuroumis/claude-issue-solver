@@ -71,7 +71,18 @@ export function openInNewTerminal(script: string): void {
     });
 
     if (result.status !== 0) {
-      console.log('Could not open new terminal. Run manually:');
+      const stderr = result.stderr?.toString() || '';
+
+      // Check for automation permission error
+      if (stderr.includes('-1743') || stderr.includes('Not authorised')) {
+        console.log('\n⚠️  macOS automation permission required!\n');
+        console.log('To fix this, go to:');
+        console.log('  System Settings → Privacy & Security → Automation\n');
+        console.log('Then enable "Terminal" for the app you\'re running this from.');
+        console.log('\nAfter granting permission, run the command again.\n');
+      } else {
+        console.log('Could not open new terminal. Run manually:');
+      }
       console.log(script);
     }
   } else if (platform === 'linux') {
