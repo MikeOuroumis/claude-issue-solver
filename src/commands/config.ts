@@ -4,12 +4,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
+import { AIToolType } from '../utils/ai-tool';
 
 const CONFIG_DIR = path.join(os.homedir(), '.claude-issue-solver');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 interface Config {
   botToken?: string;
+  aiTool?: AIToolType;
 }
 
 export function getConfig(): Config {
@@ -32,6 +34,16 @@ export function saveConfig(config: Config): void {
 
 export function getBotToken(): string | undefined {
   return getConfig().botToken;
+}
+
+export function getAITool(): AIToolType {
+  return getConfig().aiTool || AIToolType.Claude;
+}
+
+export function setAITool(tool: AIToolType): void {
+  const config = getConfig();
+  config.aiTool = tool;
+  saveConfig(config);
 }
 
 function validateToken(token: string): { valid: boolean; login?: string; error?: string } {

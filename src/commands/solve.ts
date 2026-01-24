@@ -6,6 +6,8 @@ import { execSync } from 'child_process';
 import { getIssue } from '../utils/github';
 import { getProjectRoot, getProjectName, branchExists, getDefaultBranch } from '../utils/git';
 import { slugify, copyEnvFiles, symlinkNodeModules, openInNewTerminal } from '../utils/helpers';
+import { getAITool } from './config';
+import { AI_TOOLS } from '../utils/ai-tool';
 
 export interface SolveOptions {
   autoClose?: boolean;
@@ -162,16 +164,21 @@ exec bash --norc --noprofile
     ? 'Terminal will close after PR is created.'
     : 'The terminal stays open for follow-up changes.';
 
+  // Get configured AI tool
+  const aiToolType = getAITool();
+  const aiTool = AI_TOOLS[aiToolType];
+  const aiRunCommand = aiTool.buildRunCommand(promptFile);
+
   const runnerContent = `#!/bin/bash
 cd "${worktreePath}"
 
 # Set terminal title
 echo -ne "\\033]0;Issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"').slice(0, 50)}\\007"
 
-echo "🤖 Claude Code - Issue #${issueNumber}: ${issue.title}"
+echo "🤖 ${aiTool.name} - Issue #${issueNumber}: ${issue.title}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "When Claude commits, a PR will be created automatically."
+echo "When ${aiTool.name} commits, a PR will be created automatically."
 echo "${modeMessage}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
@@ -245,8 +252,8 @@ while true; do
 done &
 WATCHER_PID=$!
 
-# Run Claude interactively
-claude --dangerously-skip-permissions "$(cat '${promptFile}')"
+# Run AI tool
+${aiRunCommand}
 
 # Clean up prompt file
 rm -f '${promptFile}'
@@ -261,13 +268,13 @@ ${autoClose ? autoCloseEnding : interactiveEnding}`;
   fs.writeFileSync(runnerScript, runnerContent, { mode: 0o755 });
 
   console.log();
-  console.log(chalk.cyan('🤖 Opening new terminal to run Claude Code...'));
+  console.log(chalk.cyan(`🤖 Opening new terminal to run ${aiTool.name}...`));
   console.log();
 
   openInNewTerminal(`'${runnerScript}'`);
 
   console.log(chalk.green(`✅ Worktree created at: ${worktreePath}`));
-  console.log(chalk.dim(`   Claude is running in a new terminal window.`));
+  console.log(chalk.dim(`   ${aiTool.name} is running in a new terminal window.`));
   console.log();
   console.log(chalk.dim(`   You can also open VS Code: code ${worktreePath}`));
   console.log(chalk.dim(`   To clean up later: claude-issue clean ${issueNumber}`));

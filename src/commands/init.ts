@@ -1,8 +1,11 @@
 import chalk from 'chalk';
 import ora from 'ora';
+import inquirer from 'inquirer';
 import { execSync, spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
+import { AIToolType, AI_TOOLS, getAllAITools } from '../utils/ai-tool';
+import { setAITool, getAITool } from './config';
 
 interface Requirement {
   name: string;
@@ -121,15 +124,6 @@ export async function initCommand(): Promise<void> {
       authCmd: 'gh auth login',
     },
     {
-      name: 'Claude Code',
-      check: () => commandExists('claude'),
-      install: () => installWithNpm('@anthropic-ai/claude-code'),
-      authCheck: isClaudeAuthenticated,
-      auth: runClaudeAuth,
-      installCmd: 'npm install -g @anthropic-ai/claude-code',
-      authCmd: 'claude (follow prompts)',
-    },
-    {
       name: 'Git',
       check: () => commandExists('git'),
       installCmd: isMac ? 'xcode-select --install' : 'apt install git',
@@ -199,6 +193,46 @@ export async function initCommand(): Promise<void> {
   console.log();
 
   if (allPassed) {
+    // Detect available AI tools
+    const availableTools = getAllAITools().filter(tool => commandExists(tool.command));
+    
+    if (availableTools.length === 0) {
+      console.log(chalk.yellow.bold('⚠️  No AI coding tool found.\n'));
+      console.log(chalk.dim('Please install at least one of the following:'));
+      for (const tool of getAllAITools()) {
+        console.log(chalk.cyan(`  ${tool.name}: ${tool.installCmd}`));
+      }
+      console.log();
+      return;
+    }
+
+    let selectedTool: AIToolType;
+
+    if (availableTools.length === 1) {
+      selectedTool = availableTools[0].type;
+      console.log(chalk.green(`✓ AI Tool: ${availableTools[0].name}`));
+    } else {
+      console.log(chalk.green('✓ Multiple AI tools detected\n'));
+      const { tool } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'tool',
+          message: 'Select AI tool to use:',
+          choices: availableTools.map(t => ({
+            name: t.name,
+            value: t.type,
+          })),
+          default: getAITool(),
+        },
+      ]);
+      selectedTool = tool;
+    }
+
+    setAITool(selectedTool);
+    const toolConfig = AI_TOOLS[selectedTool];
+    console.log(chalk.dim(`   Using: ${toolConfig.name}`));
+
+    console.log();
     console.log(chalk.green.bold('✅ All requirements met! You\'re ready to use claude-issue.\n'));
     console.log(chalk.dim('Try running:'));
     console.log(chalk.cyan('  claude-issue list    # List open issues'));
