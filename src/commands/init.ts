@@ -14,9 +14,11 @@ interface Requirement {
   authCmd?: string;
 }
 
-function commandExists(cmd: string): boolean {
+export function commandExists(cmd: string): boolean {
+  const isWindows = process.platform === 'win32';
+  const checkCmd = isWindows ? `where ${cmd}` : `which ${cmd}`;
   try {
-    execSync(`which ${cmd}`, { stdio: 'pipe' });
+    execSync(checkCmd, { stdio: 'pipe' });
     return true;
   } catch {
     return false;
