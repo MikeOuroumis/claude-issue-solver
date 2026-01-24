@@ -1,7 +1,7 @@
-import { execSync, spawn } from 'child_process';
-import * as fs from 'fs';
+import { execSync, spawn, spawnSync } from 'child_process';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
 
 export function slugify(text: string): string {
   // Remove common prefixes in brackets like [FAQ], [Bug], etc.
@@ -39,28 +39,6 @@ export function checkRequirements(): { ok: boolean; missing: string[] } {
 }
 
 /**
- * Generate AppleScript for opening a script in iTerm2.
- * Creates a new window and runs the command directly to avoid session restoration issues.
- */
-export function generateITermOpenScript(script: string): string {
-  const escapedScript = script.replace(/"/g, '\\"').replace(/'/g, '');
-  // Extract directory from script path to set as working directory
-  const scriptDir = path.dirname(script.replace(/'/g, ''));
-  const escapedDir = scriptDir.replace(/"/g, '\\"');
-  // cd to the script's directory first, so session path matches worktree
-  const bashCommand = `cd "${escapedDir}" && /bin/bash "${escapedScript}"`;
-  const escapedBashCommand = bashCommand.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-
-  return `
-      tell application "iTerm"
-        activate
-        -- Create a new window with a command to avoid session restoration issues
-        create window with default profile command "/bin/bash -c '${bashCommand.replace(/'/g, "'\\''")}'"
-      end tell
-    `;
-}
-
-/**
  * Generate AppleScript for opening a script in Terminal.app.
  * Changes to the script's directory first so the session path matches the worktree.
  * Sends 'n' first to dismiss any oh-my-zsh update prompts, then runs the script with bash.
@@ -85,25 +63,18 @@ export function openInNewTerminal(script: string): void {
   const platform = os.platform();
 
   if (platform === 'darwin') {
-    // macOS - try iTerm2 first, then Terminal
-    const iTermScript = generateITermOpenScript(script);
+    // macOS - use Terminal.app (always available, no session restoration issues)
     const terminalScript = generateTerminalOpenScript(script);
 
-    try {
-      // Check if iTerm is installed
-      if (fs.existsSync('/Applications/iTerm.app')) {
-        execSync(`osascript -e '${iTermScript}'`, { stdio: 'pipe' });
-      } else {
-        execSync(`osascript -e '${terminalScript}'`, { stdio: 'pipe' });
-      }
-    } catch {
-      // Fallback to Terminal
-      try {
-        execSync(`osascript -e '${terminalScript}'`, { stdio: 'pipe' });
-      } catch {
-        console.log('Could not open new terminal. Run manually:');
-        console.log(script);
-      }
+    // Use spawnSync with stdin to avoid shell escaping issues
+    const result = spawnSync('osascript', [], {
+      input: terminalScript,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      console.log('Could not open new terminal. Run manually:');
+      console.log(script);
     }
   } else if (platform === 'linux') {
     // Linux - try common terminal emulators

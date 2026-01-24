@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  slugify,
-  generateITermOpenScript,
-  generateTerminalOpenScript,
-} from './helpers';
+import { slugify, generateTerminalOpenScript } from './helpers';
 
 describe('helpers utilities', () => {
   describe('slugify', () => {
@@ -27,45 +23,6 @@ describe('helpers utilities', () => {
     it('should limit slug to 30 characters', () => {
       const longTitle = 'This is a very long issue title that should be truncated';
       expect(slugify(longTitle).length).toBeLessThanOrEqual(30);
-    });
-  });
-
-  describe('generateITermOpenScript', () => {
-    it('should generate valid AppleScript for iTerm', () => {
-      const script = generateITermOpenScript('/path/to/script.sh');
-
-      expect(script).toContain('tell application "iTerm"');
-      expect(script).toContain('create window with default profile command');
-    });
-
-    it('should use create window with command to avoid session restoration', () => {
-      const script = generateITermOpenScript('/path/to/script.sh');
-
-      // Should use command parameter to run directly without session restoration
-      expect(script).toContain('create window with default profile command');
-      expect(script).toContain('/bin/bash -c');
-    });
-
-    it('should use /bin/bash to run the script', () => {
-      const script = generateITermOpenScript('/path/to/script.sh');
-
-      expect(script).toContain('/bin/bash');
-      expect(script).toContain('/path/to/script.sh');
-    });
-
-    it('should handle double quotes in script path without breaking AppleScript', () => {
-      const script = generateITermOpenScript('/path/to/"quoted"/script.sh');
-
-      // Should still contain the path and be valid AppleScript structure
-      expect(script).toContain('tell application "iTerm"');
-      expect(script).toContain('/bin/bash');
-      expect(script).toContain('quoted');
-    });
-
-    it('should handle paths with spaces', () => {
-      const script = generateITermOpenScript('/path/with spaces/script.sh');
-
-      expect(script).toContain('/path/with spaces/script.sh');
     });
   });
 
@@ -107,14 +64,6 @@ describe('helpers utilities', () => {
   });
 
   describe('oh-my-zsh bypass behavior', () => {
-    it('iTerm script should run command directly to avoid session restoration', () => {
-      const script = generateITermOpenScript('/test/script.sh');
-
-      // Should use create window with command to avoid session restoration issues
-      expect(script).toContain('create window with default profile command');
-      expect(script).toContain('/bin/bash');
-    });
-
     it('Terminal script should combine dismiss and command in single do script', () => {
       const script = generateTerminalOpenScript('/test/script.sh');
 
@@ -124,14 +73,6 @@ describe('helpers utilities', () => {
   });
 
   describe('working directory for terminal closing', () => {
-    it('iTerm script should cd to script directory before running', () => {
-      const script = generateITermOpenScript('/path/to/worktree/.claude-runner.sh');
-
-      // Should cd to the script's directory
-      expect(script).toContain('cd "/path/to/worktree"');
-      expect(script).toContain('/bin/bash');
-    });
-
     it('Terminal script should cd to script directory before running', () => {
       const script = generateTerminalOpenScript('/path/to/worktree/.claude-runner.sh');
 
@@ -141,7 +82,7 @@ describe('helpers utilities', () => {
     });
 
     it('should handle script paths with quotes', () => {
-      const script = generateITermOpenScript('/path/to/work"tree/.script.sh');
+      const script = generateTerminalOpenScript('/path/to/work"tree/.script.sh');
 
       expect(script).toContain('/bin/bash');
       // Path should be escaped
