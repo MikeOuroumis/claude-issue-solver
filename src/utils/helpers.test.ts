@@ -35,20 +35,15 @@ describe('helpers utilities', () => {
       const script = generateITermOpenScript('/path/to/script.sh');
 
       expect(script).toContain('tell application "iTerm"');
-      expect(script).toContain('create window with default profile');
-      expect(script).toContain('write text');
+      expect(script).toContain('create window with default profile command');
     });
 
-    it('should send "n" to dismiss oh-my-zsh update prompts', () => {
+    it('should use create window with command to avoid session restoration', () => {
       const script = generateITermOpenScript('/path/to/script.sh');
 
-      expect(script).toContain('write text "n"');
-    });
-
-    it('should include delay after dismissing prompt', () => {
-      const script = generateITermOpenScript('/path/to/script.sh');
-
-      expect(script).toContain('delay 0.3');
+      // Should use command parameter to run directly without session restoration
+      expect(script).toContain('create window with default profile command');
+      expect(script).toContain('/bin/bash -c');
     });
 
     it('should use /bin/bash to run the script', () => {
@@ -112,18 +107,12 @@ describe('helpers utilities', () => {
   });
 
   describe('oh-my-zsh bypass behavior', () => {
-    it('iTerm script should have prompt dismissal before command execution', () => {
+    it('iTerm script should run command directly to avoid session restoration', () => {
       const script = generateITermOpenScript('/test/script.sh');
-      const lines = script.split('\n');
 
-      // Find the indices of the relevant lines
-      const dismissIndex = lines.findIndex(line => line.includes('write text "n"'));
-      const commandIndex = lines.findIndex(line => line.includes('/bin/bash'));
-
-      // Dismissal should come before command
-      expect(dismissIndex).toBeGreaterThan(-1);
-      expect(commandIndex).toBeGreaterThan(-1);
-      expect(dismissIndex).toBeLessThan(commandIndex);
+      // Should use create window with command to avoid session restoration issues
+      expect(script).toContain('create window with default profile command');
+      expect(script).toContain('/bin/bash');
     });
 
     it('Terminal script should combine dismiss and command in single do script', () => {
@@ -138,8 +127,8 @@ describe('helpers utilities', () => {
     it('iTerm script should cd to script directory before running', () => {
       const script = generateITermOpenScript('/path/to/worktree/.claude-runner.sh');
 
-      // Should cd to the script's directory first (quotes are escaped in AppleScript)
-      expect(script).toContain('cd \\"/path/to/worktree\\"');
+      // Should cd to the script's directory
+      expect(script).toContain('cd "/path/to/worktree"');
       expect(script).toContain('/bin/bash');
     });
 

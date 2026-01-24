@@ -40,26 +40,22 @@ export function checkRequirements(): { ok: boolean; missing: string[] } {
 
 /**
  * Generate AppleScript for opening a script in iTerm2.
- * Changes to the script's directory first so the session path matches the worktree.
- * Sends 'n' first to dismiss any oh-my-zsh update prompts, then runs the script with bash.
+ * Creates a new window and runs the command directly to avoid session restoration issues.
  */
 export function generateITermOpenScript(script: string): string {
-  const escapedScript = script.replace(/"/g, '\\"');
+  const escapedScript = script.replace(/"/g, '\\"').replace(/'/g, '');
   // Extract directory from script path to set as working directory
   const scriptDir = path.dirname(script.replace(/'/g, ''));
   const escapedDir = scriptDir.replace(/"/g, '\\"');
   // cd to the script's directory first, so session path matches worktree
   const bashCommand = `cd "${escapedDir}" && /bin/bash "${escapedScript}"`;
+  const escapedBashCommand = bashCommand.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
   return `
       tell application "iTerm"
         activate
-        set newWindow to (create window with default profile)
-        tell current session of newWindow
-          write text "n"
-          delay 0.3
-          write text "${bashCommand.replace(/"/g, '\\"')}"
-        end tell
+        -- Create a new window with a command to avoid session restoration issues
+        create window with default profile command "/bin/bash -c '${bashCommand.replace(/'/g, "'\\''")}'"
       end tell
     `;
 }
