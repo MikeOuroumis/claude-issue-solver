@@ -41,7 +41,6 @@ export function checkRequirements(): { ok: boolean; missing: string[] } {
 /**
  * Generate AppleScript for opening a script in Terminal.app.
  * Changes to the script's directory first so the session path matches the worktree.
- * Sends 'n' first to dismiss any oh-my-zsh update prompts, then runs the script with bash.
  */
 export function generateTerminalOpenScript(script: string): string {
   const escapedScript = script.replace(/"/g, '\\"');
@@ -49,14 +48,12 @@ export function generateTerminalOpenScript(script: string): string {
   const scriptDir = path.dirname(script.replace(/'/g, ''));
   const escapedDir = scriptDir.replace(/"/g, '\\"');
   // cd to the script's directory first, so session path matches worktree
-  const bashCommand = `cd "${escapedDir}" && /bin/bash "${escapedScript}"`;
+  const bashCommand = `cd \\"${escapedDir}\\" && /bin/bash \\"${escapedScript}\\"`;
 
-  return `
-      tell application "Terminal"
-        activate
-        do script "n; ${bashCommand.replace(/"/g, '\\"')}"
-      end tell
-    `;
+  return `tell application "Terminal"
+activate
+do script "${bashCommand}"
+end tell`;
 }
 
 export function openInNewTerminal(script: string): void {

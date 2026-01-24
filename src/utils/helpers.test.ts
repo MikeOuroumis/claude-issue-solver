@@ -34,12 +34,6 @@ describe('helpers utilities', () => {
       expect(script).toContain('do script');
     });
 
-    it('should send "n" to dismiss oh-my-zsh update prompts', () => {
-      const script = generateTerminalOpenScript('/path/to/script.sh');
-
-      expect(script).toContain('n;');
-    });
-
     it('should use /bin/bash to run the script', () => {
       const script = generateTerminalOpenScript('/path/to/script.sh');
 
@@ -60,15 +54,6 @@ describe('helpers utilities', () => {
       const script = generateTerminalOpenScript('/path/with spaces/script.sh');
 
       expect(script).toContain('/path/with spaces/script.sh');
-    });
-  });
-
-  describe('oh-my-zsh bypass behavior', () => {
-    it('Terminal script should combine dismiss and command in single do script', () => {
-      const script = generateTerminalOpenScript('/test/script.sh');
-
-      // Should have "n; /bin/bash..." in a single do script call
-      expect(script).toMatch(/do script "n;.*\/bin\/bash/);
     });
   });
 
