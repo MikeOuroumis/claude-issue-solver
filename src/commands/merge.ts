@@ -3,9 +3,9 @@ import ora from 'ora';
 import inquirer from 'inquirer';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { execSync } from 'child_process';
 import { getProjectRoot, getProjectName } from '../utils/git';
+import { closeWindowsForWorktree } from '../utils/terminal';
 
 interface OpenPR {
   number: number;
@@ -14,82 +14,6 @@ interface OpenPR {
   issueNumber: number | null;
   reviewDecision: string | null;
   mergeable: string;
-}
-
-function closeWindowsWithPath(folderPath: string, issueNumber: string, prNumber?: string): void {
-  if (os.platform() !== 'darwin') return;
-
-  const folderName = path.basename(folderPath);
-  const issuePattern = `Issue #${issueNumber}`;
-  const reviewPattern = prNumber ? `Review PR #${prNumber}` : `issue-${issueNumber}-`;
-
-  // Try to close iTerm2 tabs/windows
-  try {
-    execSync(`osascript -e '
-      tell application "iTerm"
-        repeat with w in windows
-          try
-            set windowName to name of w
-            if windowName contains "${folderName}" or windowName contains "${issuePattern}" or windowName contains "${reviewPattern}" then
-              close w
-            end if
-          end try
-          repeat with t in tabs of w
-            repeat with s in sessions of t
-              try
-                set sessionName to name of s
-                if sessionName contains "${folderName}" or sessionName contains "${issuePattern}" or sessionName contains "${reviewPattern}" then
-                  close s
-                end if
-              end try
-            end repeat
-          end repeat
-        end repeat
-      end tell
-    '`, { stdio: 'pipe' });
-  } catch {
-    // iTerm not running
-  }
-
-  // Try to close Terminal.app windows
-  try {
-    execSync(`osascript -e '
-      tell application "Terminal"
-        repeat with w in windows
-          set windowName to name of w
-          if windowName contains "${folderName}" or windowName contains "${issuePattern}" or windowName contains "${reviewPattern}" then
-            close w
-          end if
-        end repeat
-      end tell
-    '`, { stdio: 'pipe' });
-  } catch {
-    // Terminal not running
-  }
-
-  // Try to close VS Code windows
-  try {
-    execSync(`osascript -e '
-      tell application "System Events"
-        if exists process "Code" then
-          tell process "Code"
-            set windowList to every window
-            repeat with w in windowList
-              try
-                set windowName to name of w
-                if windowName contains "${folderName}" then
-                  perform action "AXPress" of (first button of w whose subrole is "AXCloseButton")
-                  delay 0.2
-                end if
-              end try
-            end repeat
-          end tell
-        end if
-      end tell
-    '`, { stdio: 'pipe', timeout: 5000 });
-  } catch {
-    // VS Code not running
-  }
 }
 
 function getOpenPRs(projectRoot: string): OpenPR[] {
@@ -124,7 +48,11 @@ function cleanupWorktree(projectRoot: string, branchName: string, issueNumber: s
   // Close windows (including review terminals)
   if (issueNumber) {
     try {
-      closeWindowsWithPath(worktreePath, issueNumber, prNumber);
+      closeWindowsForWorktree({
+        folderPath: worktreePath,
+        issueNumber,
+        prNumber,
+      });
     } catch {
       // Ignore
     }
