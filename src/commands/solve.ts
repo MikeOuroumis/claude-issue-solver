@@ -9,6 +9,7 @@ import { slugify, copyEnvFiles, symlinkNodeModules, openInNewTerminal } from '..
 
 export interface SolveOptions {
   autoClose?: boolean;
+  sound?: boolean;
 }
 
 export async function solveCommand(issueNumber: number, options: SolveOptions = {}): Promise<void> {
@@ -99,6 +100,7 @@ Instructions:
   // Create runner script
   const runnerScript = path.join(worktreePath, '.claude-runner.sh');
   const autoClose = options.autoClose || false;
+  const playSound = options.sound || false;
 
   const autoCloseEnding = `
 echo ""
@@ -220,6 +222,8 @@ $COMMIT_LIST
         # Update terminal title with PR info
         PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
         echo -ne "\\033]0;Issue #${issueNumber} → PR #\$PR_NUM\\007"
+        # Play success sound (macOS)
+        ${playSound ? 'afplay /System/Library/Sounds/Glass.aiff 2>/dev/null &' : ''}
       fi
     else
       # PR exists, just push new commits

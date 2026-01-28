@@ -58,16 +58,17 @@ program.hook('preAction', (thisCommand) => {
 program
   .argument('[issue]', 'Issue number to solve')
   .option('-c, --auto-close', 'Close terminal and clean up worktree after PR is created')
+  .option('-s, --sound', 'Play a sound when PR is created (macOS)')
   .option('-n, --limit <number>', 'Maximum number of issues to show', (val) => parseInt(val, 10))
   .option('--all', 'Show all issues (no limit)')
-  .action(async (issue: string | undefined, options: SelectOptions & { autoClose?: boolean }) => {
+  .action(async (issue: string | undefined, options: SelectOptions & { autoClose?: boolean; sound?: boolean }) => {
     if (issue) {
       const issueNumber = parseInt(issue, 10);
       if (isNaN(issueNumber)) {
         console.log(chalk.red(`❌ Invalid issue number: ${issue}`));
         process.exit(1);
       }
-      await solveCommand(issueNumber, { autoClose: options.autoClose });
+      await solveCommand(issueNumber, { autoClose: options.autoClose, sound: options.sound });
     } else {
       await selectCommand(options);
     }
