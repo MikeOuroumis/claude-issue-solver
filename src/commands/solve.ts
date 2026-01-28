@@ -9,6 +9,7 @@ import { slugify, copyEnvFiles, symlinkNodeModules, openInNewTerminal } from '..
 
 export interface SolveOptions {
   autoClose?: boolean;
+  open?: boolean;
 }
 
 export async function solveCommand(issueNumber: number, options: SolveOptions = {}): Promise<void> {
@@ -99,6 +100,7 @@ Instructions:
   // Create runner script
   const runnerScript = path.join(worktreePath, '.claude-runner.sh');
   const autoClose = options.autoClose || false;
+  const openPR = options.open || false;
 
   const autoCloseEnding = `
 echo ""
@@ -165,6 +167,9 @@ exec bash --norc --noprofile
   const runnerContent = `#!/bin/bash
 cd "${worktreePath}"
 
+# Configuration
+OPEN_PR_IN_BROWSER=${openPR ? '1' : '0'}
+
 # Set terminal title
 echo -ne "\\033]0;Issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"').slice(0, 50)}\\007"
 
@@ -220,6 +225,15 @@ $COMMIT_LIST
         # Update terminal title with PR info
         PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
         echo -ne "\\033]0;Issue #${issueNumber} → PR #\$PR_NUM\\007"
+
+        # Open PR in browser if requested
+        if [ "$OPEN_PR_IN_BROWSER" = "1" ]; then
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            open "$PR_URL"
+          elif [[ "$OSTYPE" == "linux"* ]]; then
+            xdg-open "$PR_URL" 2>/dev/null || true
+          fi
+        fi
       fi
     else
       # PR exists, just push new commits
