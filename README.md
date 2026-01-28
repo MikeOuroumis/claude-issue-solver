@@ -26,8 +26,6 @@ This CLI tool fetches an issue from your repo, creates a worktree, opens Claude 
 
 ## Demo
 
-https://github.com/MikeOuroumis/claude-issue-solver/releases/download/v1.45.1/solving-issues-demo.mp4
-
 ```bash
 $ cis
 
