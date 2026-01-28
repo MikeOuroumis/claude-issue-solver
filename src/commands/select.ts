@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import { listIssues, getIssuesWithOpenPRs } from '../utils/github';
+import { listIssues, getIssuesWithOpenPRs, getTotalIssueCount } from '../utils/github';
 import { getProjectName } from '../utils/git';
 import { solveCommand, SolveOptions } from './solve';
 
@@ -25,7 +25,12 @@ export async function selectCommand(options: SelectOptions = {}): Promise<void> 
   const defaultLimit = 50;
   const hitLimit = !options.all && !options.limit && issues.length === defaultLimit;
   if (hitLimit) {
-    console.log(chalk.dim(`  Showing first ${defaultLimit} issues. Use --limit <n> or --all to see more.\n`));
+    const totalCount = getTotalIssueCount();
+    if (totalCount > defaultLimit) {
+      console.log(chalk.dim(`  Showing ${defaultLimit} of ${totalCount} issues. Use --limit <n> or --all to see more.\n`));
+    } else {
+      console.log(chalk.dim(`  Showing first ${defaultLimit} issues. Use --limit <n> or --all to see more.\n`));
+    }
   }
 
   const issuesWithPRs = getIssuesWithOpenPRs();
