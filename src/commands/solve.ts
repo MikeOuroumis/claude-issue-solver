@@ -90,7 +90,7 @@ Instructions:
 2. Implement the necessary changes
 3. Make sure to run tests if applicable
 4. When done, commit your changes with a descriptive message that references the issue
-5. After committing, create a PR that closes this issue (use "Closes #${issueNumber}" in the PR body)`;
+5. Do NOT create a PR - it will be created automatically when you commit`;
 
   // Write prompt to a file to avoid shell escaping issues with backticks, <>, etc.
   const promptFile = path.join(worktreePath, '.claude-prompt.txt');
@@ -251,8 +251,9 @@ claude --dangerously-skip-permissions "$(cat '${promptFile}')"
 # Clean up prompt file
 rm -f '${promptFile}'
 
-# Kill the watcher
+# Kill the watcher and wait for any in-flight create_pr to finish
 kill $WATCHER_PID 2>/dev/null
+wait $WATCHER_PID 2>/dev/null
 
 # Final PR check after Claude exits
 create_pr
