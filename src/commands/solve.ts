@@ -165,6 +165,9 @@ exec bash --norc --noprofile
   const runnerContent = `#!/bin/bash
 cd "${worktreePath}"
 
+# Record start time for elapsed time calculation
+START_TIME=$(date +%s)
+
 # Set terminal title
 echo -ne "\\033]0;Issue #${issueNumber}: ${issue.title.replace(/"/g, '\\"').slice(0, 50)}\\007"
 
@@ -209,11 +212,23 @@ $COMMIT_LIST
         --base ${baseBranch} 2>/dev/null)
 
       if [ -n "$PR_URL" ]; then
+        # Calculate elapsed time
+        END_TIME=$(date +%s)
+        ELAPSED=$((END_TIME - START_TIME))
+        if [ $ELAPSED -ge 60 ]; then
+          MINUTES=$((ELAPSED / 60))
+          SECONDS=$((ELAPSED % 60))
+          ELAPSED_STR="\${MINUTES}m \${SECONDS}s"
+        else
+          ELAPSED_STR="\${ELAPSED}s"
+        fi
+
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "✅ PR CREATED!"
         echo ""
         echo "   $PR_URL"
+        echo "   Completed in $ELAPSED_STR"
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
