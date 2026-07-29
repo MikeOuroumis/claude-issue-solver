@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { listIssues, getIssuesWithOpenPRs } from '../utils/github';
+import { listIssues, getIssuesWithOpenPRs, getTotalIssueCount } from '../utils/github';
 import { getProjectName } from '../utils/git';
 
 function formatBody(body: string, indent: string, termWidth: number): string[] {
@@ -70,7 +70,12 @@ export async function listCommand(options: { verbose?: boolean; limit?: number; 
   // Show hint if we hit the limit and user didn't explicitly set options
   const hitLimit = !options.all && !options.limit && issues.length === limit;
   if (hitLimit) {
-    console.log(chalk.dim(`  Showing first ${limit} issues. Use --limit <n> or --all to see more.\n`));
+    const totalCount = getTotalIssueCount();
+    if (totalCount > limit) {
+      console.log(chalk.dim(`  Showing ${limit} of ${totalCount} issues. Use --limit <n> or --all to see more.\n`));
+    } else {
+      console.log(chalk.dim(`  Showing first ${limit} issues. Use --limit <n> or --all to see more.\n`));
+    }
   }
 
   const issuesWithPRs = getIssuesWithOpenPRs();

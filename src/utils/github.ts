@@ -86,6 +86,19 @@ export function listIssues(limit = 50): IssueListItem[] {
   }
 }
 
+export function getTotalIssueCount(): number {
+  try {
+    // Use gh api to get repository issue count efficiently
+    const output = execSync(
+      `gh api repos/{owner}/{repo} --jq '.open_issues_count'`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    return parseInt(output.trim(), 10);
+  } catch {
+    return 0;
+  }
+}
+
 export function createPullRequest(
   title: string,
   body: string,
