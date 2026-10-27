@@ -12,6 +12,9 @@ Automatically solve GitHub issues using [Claude Code](https://claude.ai/code).
 
 This CLI tool fetches an issue from your repo, creates a worktree, opens Claude Code in a new terminal to solve it, and creates a PR when done.
 
+> [!NOTE]
+> This project is not actively maintained anymore. It still works as-is, but I'm not adding features or reviewing new issues or PRs. For a maintained alternative, see Anthropic's official [Claude Code GitHub Action](https://github.com/anthropics/claude-code-action).
+
 > **⚠️ DISCLAIMER: USE AT YOUR OWN RISK**
 >
 > This tool runs Claude Code with the `--dangerously-skip-permissions` flag, which allows Claude to execute commands and modify files **without asking for confirmation**. This is powerful but potentially risky.
